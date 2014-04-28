@@ -11,9 +11,11 @@ However...
 I have created this board as a project for a friend.  You are welcome to copy the code, design, etc, as long as you retain the original author's copyright and license information.
 
 ### Folders
-/board
-  Eagle files
-/sketchbookfolder/gpslogger
-  Project source
-/sketchbookfolder/libraries
-  3rd party Arduino libraries
+* /board
+  * Eagle files
+* /media
+  * Pictures of the board through development to final packaging
+* /sketchbookfolder/gpslogger
+  * Project source
+* /sketchbookfolder/libraries
+  * 3rd party Arduino libraries
