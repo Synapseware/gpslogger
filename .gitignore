@@ -24,7 +24,7 @@ Visual Micro/
 **.vcxproj.filters
 **.opensdf
 **.sdf
-
+~*.*
 
 #Ignore specific arduino release folders
 arduino/arduino-1.0.5/
