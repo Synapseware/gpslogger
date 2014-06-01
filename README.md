@@ -3,7 +3,7 @@ gpslogger
 The GPS Logger is an Arduino clone board that uses the Adafruit GPS breakout board and a micro-SD socket.  The intention is to create a low power GPS logger that can last a couple of weeks between recharges and that can record data nearly indefinitely.
 
 The initial implementation has a few problems.  Namely:
-* The Arduino's TX & RX pins are backwards, requireing the use of the serial-header board to correct the pinouts.
+* The Arduino's TX & RX pins are backwards, requiring the use of the serial-header board to correct the pinouts.
 * Not all the Adafruit GPS breakout board pins are brought out to the Arduino
 * No on-board reset button.
 
