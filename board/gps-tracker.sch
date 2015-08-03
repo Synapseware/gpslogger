@@ -4364,19 +4364,14 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 <sheet>
 <plain>
 <text x="116.84" y="134.62" size="1.016" layer="97">3V3</text>
-<text x="116.84" y="132.08" size="1.016" layer="97">EN</text>
-<text x="116.84" y="129.54" size="1.016" layer="97">VBATT</text>
 <text x="116.84" y="127" size="1.016" layer="97">FIX</text>
 <text x="116.84" y="124.46" size="1.016" layer="97">TX</text>
 <text x="116.84" y="121.92" size="1.016" layer="97">RX</text>
 <text x="116.84" y="119.38" size="1.016" layer="97">GND</text>
-<text x="116.84" y="116.84" size="1.016" layer="97">VIN</text>
-<text x="116.84" y="114.3" size="1.016" layer="97">PPS</text>
 <text x="260.35" y="85.09" size="1.016" layer="97">VBATT SENSE</text>
 <text x="260.35" y="102.87" size="1.016" layer="95">GPS FIX</text>
 <text x="260.35" y="97.79" size="1.016" layer="97">GPS TX</text>
 <text x="260.35" y="95.25" size="1.016" layer="97">GPS RX</text>
-<text x="260.35" y="92.71" size="1.016" layer="97">GPS EN LED</text>
 <text x="260.35" y="77.47" size="1.016" layer="97">SD CS</text>
 <text x="260.35" y="72.39" size="1.016" layer="97">MOSI</text>
 <text x="260.35" y="69.85" size="1.016" layer="97">MISO</text>
@@ -4395,7 +4390,7 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 <instance part="C9" gate="G$1" x="80.01" y="-22.86"/>
 <instance part="GND4" gate="1" x="59.69" y="-34.29"/>
 <instance part="X1" gate="G$1" x="-6.35" y="71.12"/>
-<instance part="GND5" gate="1" x="-19.05" y="60.96"/>
+<instance part="GND5" gate="1" x="-19.05" y="59.69"/>
 <instance part="C10" gate="G$1" x="-27.94" y="71.12"/>
 <instance part="GND6" gate="1" x="24.13" y="68.58"/>
 <instance part="GND3" gate="1" x="5.08" y="25.4"/>
@@ -4484,10 +4479,9 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 <wire x1="-19.05" y1="71.12" x2="-19.05" y2="66.04" width="0.1524" layer="91"/>
 <pinref part="GND5" gate="1" pin="GND"/>
 <pinref part="C10" gate="G$1" pin="2"/>
-<wire x1="-19.05" y1="66.04" x2="-19.05" y2="63.5" width="0.1524" layer="91"/>
 <wire x1="-27.94" y1="68.58" x2="-27.94" y2="66.04" width="0.1524" layer="91"/>
 <wire x1="-27.94" y1="66.04" x2="-19.05" y2="66.04" width="0.1524" layer="91"/>
-<wire x1="-19.05" y1="66.04" x2="-19.05" y2="63.5" width="0.1524" layer="91"/>
+<wire x1="-19.05" y1="66.04" x2="-19.05" y2="62.23" width="0.1524" layer="91"/>
 <junction x="-19.05" y="66.04"/>
 </segment>
 <segment>
@@ -4720,21 +4714,6 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 <pinref part="U$1" gate="G$1" pin="VAUX"/>
 </segment>
 </net>
-<net name="CD" class="0">
-<segment>
-<pinref part="MICRO-SD-SOCKET" gate="G$1" pin="SHIELD@2"/>
-<wire x1="115.57" y1="57.15" x2="110.49" y2="57.15" width="0.2032" layer="91"/>
-<junction x="110.49" y="57.15"/>
-</segment>
-</net>
-<net name="N$9" class="0">
-<segment>
-<pinref part="J2" gate="G$1" pin="2"/>
-<wire x1="24.13" y1="109.22" x2="29.21" y2="109.22" width="0.2032" layer="91"/>
-<wire x1="29.21" y1="109.22" x2="29.21" y2="114.3" width="0.2032" layer="91"/>
-<junction x="29.21" y="114.3"/>
-</segment>
-</net>
 <net name="MISO" class="0">
 <segment>
 <pinref part="J2" gate="G$1" pin="1"/>
@@ -4861,34 +4840,6 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 <pinref part="IC1" gate="G$1" pin="PB2(PDI/MOSI/PCINT2)"/>
 </segment>
 </net>
-<net name="PPS" class="0">
-<segment>
-<pinref part="GPS-HEADER" gate="G$1" pin="9"/>
-<wire x1="120.65" y1="114.3" x2="115.57" y2="114.3" width="0.2032" layer="91"/>
-<junction x="115.57" y="114.3"/>
-</segment>
-</net>
-<net name="VIN" class="0">
-<segment>
-<pinref part="GPS-HEADER" gate="G$1" pin="8"/>
-<wire x1="120.65" y1="116.84" x2="115.57" y2="116.84" width="0.2032" layer="91"/>
-<junction x="115.57" y="116.84"/>
-</segment>
-</net>
-<net name="N$15" class="0">
-<segment>
-<pinref part="GPS-HEADER" gate="G$1" pin="3"/>
-<wire x1="120.65" y1="129.54" x2="115.57" y2="129.54" width="0.2032" layer="91"/>
-<junction x="115.57" y="129.54"/>
-</segment>
-</net>
-<net name="EN" class="0">
-<segment>
-<pinref part="GPS-HEADER" gate="G$1" pin="2"/>
-<wire x1="120.65" y1="132.08" x2="115.57" y2="132.08" width="0.2032" layer="91"/>
-<junction x="115.57" y="132.08"/>
-</segment>
-</net>
 <net name="N$5" class="0">
 <segment>
 <pinref part="LED2" gate="G$1" pin="C"/>
@@ -4918,13 +4869,6 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 <wire x1="259.08" y1="77.47" x2="265.43" y2="77.47" width="0.2032" layer="91"/>
 <junction x="265.43" y="77.47"/>
 <pinref part="IC1" gate="G$1" pin="PB0(SS/PCINT0)"/>
-</segment>
-</net>
-<net name="GPS_EN_LED" class="0">
-<segment>
-<wire x1="259.08" y1="92.71" x2="266.7" y2="92.71" width="0.2032" layer="91"/>
-<junction x="266.7" y="92.71"/>
-<pinref part="IC1" gate="G$1" pin="PD4(INT5/AIN3)"/>
 </segment>
 </net>
 <net name="GPS_TX" class="0">
@@ -5056,6 +5000,50 @@ Standard 0603 ceramic capacitor, and 0.1" leaded capacitor.</description>
 </nets>
 </sheet>
 </sheets>
+<errors>
+<approved hash="104,1,34.29,-12.7,U2,VIN,VUSB,,,"/>
+<approved hash="104,1,54.61,-12.7,U2,VBAT,VBATT,,,"/>
+<approved hash="104,1,54.61,-17.78,U2,VSS,GND,,,"/>
+<approved hash="113,1,14.5627,77.6108,BATTERY,,,,,"/>
+<approved hash="115,1,99.06,9.525,FB,,,,,"/>
+<approved hash="115,1,55.88,25.4,FB,,,,,"/>
+<approved hash="115,1,283.845,85.09,VBATT,,,,,"/>
+<approved hash="115,1,68.58,116.84,VBATT,,,,,"/>
+<approved hash="115,1,48.895,77.47,VBATT,,,,,"/>
+<approved hash="115,1,20.32,36.83,VBATT,,,,,"/>
+<approved hash="115,1,21.59,77.47,VBATT,,,,,"/>
+<approved hash="115,1,67.31,-12.7,VBATT,,,,,"/>
+<approved hash="115,1,262.255,77.47,SD_CS,,,,,"/>
+<approved hash="115,1,113.03,80.01,SD_CS,,,,,"/>
+<approved hash="115,1,-8.89,103.505,D+,,,,,"/>
+<approved hash="115,1,198.12,87.63,D+,,,,,"/>
+<approved hash="115,1,262.255,72.39,MOSI,,,,,"/>
+<approved hash="115,1,26.67,106.68,MOSI,,,,,"/>
+<approved hash="115,1,113.03,77.47,MOSI,,,,,"/>
+<approved hash="115,1,-17.78,103.505,D-,,,,,"/>
+<approved hash="115,1,198.12,90.17,D-,,,,,"/>
+<approved hash="115,1,113.03,9.525,UVLO,,,,,"/>
+<approved hash="115,1,20.32,26.67,UVLO,,,,,"/>
+<approved hash="115,1,262.89,97.79,GPS_RX,,,,,"/>
+<approved hash="115,1,118.11,121.92,GPS_RX,,,,,"/>
+<approved hash="115,1,80.645,77.47,VUSB,,,,,"/>
+<approved hash="115,1,6.985,-17.78,VUSB,,,,,"/>
+<approved hash="115,1,-13.97,73.66,VUSB,,,,,"/>
+<approved hash="115,1,262.89,90.17,BATT_LED,,,,,"/>
+<approved hash="115,1,127,-5.715,BATT_LED,,,,,"/>
+<approved hash="115,1,262.89,102.87,GPS_FIX,,,,,"/>
+<approved hash="115,1,118.11,127,GPS_FIX,,,,,"/>
+<approved hash="115,1,187.96,59.055,/RESET,,,,,"/>
+<approved hash="115,1,3.81,104.14,/RESET,,,,,"/>
+<approved hash="115,1,262.89,95.25,GPS_TX,,,,,"/>
+<approved hash="115,1,118.11,124.46,GPS_TX,,,,,"/>
+<approved hash="115,1,262.255,74.93,SCK,,,,,"/>
+<approved hash="115,1,113.03,72.39,SCK,,,,,"/>
+<approved hash="115,1,3.81,106.68,SCK,,,,,"/>
+<approved hash="115,1,262.255,69.85,MISO,,,,,"/>
+<approved hash="115,1,113.03,67.31,MISO,,,,,"/>
+<approved hash="115,1,3.81,109.22,MISO,,,,,"/>
+</errors>
 </schematic>
 </drawing>
 </eagle>
