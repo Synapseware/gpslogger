@@ -1,5 +1,5 @@
 #---------------- User options --------------------------------
-BOARD_TAG    = atmega32u2
+BOARD_TAG    = MT­DB­U2
 MCU			 = atmega32u2
 F_CPU		 = 16000000L
 ARDUINO_LIBS = Adafruit_GPS_Library
