@@ -11,10 +11,9 @@ ARDUINO_QUIET = true
 
 #---------------- Chip settings --------------------------------
 # Fuses
-L_FUSE	= 0xFF
-H_FUSE	= 0xDA
-E_FUSE	= 0xFD
-#E_FUSE	= 0x05
+L_FUSE	= 0xDE
+H_FUSE	= 0xD1
+E_FUSE	= 0xF4
 
 
 #---------------- Programming Options (avrdude) ----------------
