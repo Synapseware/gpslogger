@@ -3,7 +3,7 @@ BOARD_TAG		= mtdbu2
 ALTERNATE_CORE	= MattairTech
 MCU				= atmega32u2
 F_CPU			= 16000000L
-ARDUINO_LIBS	= Adafruit_GPS_Library SdFat
+ARDUINO_LIBS	= Adafruit_GPS_Library SdFat SoftwareSerial
 BUILD_FOLDER	= build-$(BOARD_TAG)
 
 #Suppress output of arduino-make variables
