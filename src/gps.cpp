@@ -1,6 +1,7 @@
-#include "gpslogger.h"
+#include "gps.h"
 
-volatile bool _gps_enabled		= true;
+volatile bool _gps_enabled = true;
+static char _nmeaSentence[120];
 
 //------------------------------------------------------------------------
 void initializeGPS(void)

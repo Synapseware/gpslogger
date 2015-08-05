@@ -7,7 +7,7 @@ ARDUINO_LIBS	= Adafruit_GPS_Library SdFat_20131225 SoftwareSerial
 BUILD_FOLDER	= build-$(BOARD_TAG)
 
 #Suppress output of arduino-make variables
-# ARDUINO_QUIET	= true
+ARDUINO_QUIET	= true
 
 
 #---------------- Chip settings --------------------------------

@@ -15,10 +15,6 @@ volatile uint16_t	_recordingTimeout	= 0;
 volatile uint16_t	_lastReset			= 0;
 
 
-static char _nmeaSentence[120];			// buffer to store NMEA sentence.
-static char _fileName[64];				// buffer to store filename
-
-
 void (*reset)(void) = 0;
 
 
@@ -69,9 +65,6 @@ void setup()
 
 	// set power-saving options
 	power_all_enable();
-	power_adc_disable();
-	power_twi_disable();
-	power_timer2_disable();
 
 	pinMode(DBG_LED, OUTPUT);
 	pinMode(SD_CS, OUTPUT);
@@ -220,8 +213,6 @@ void processBattery(void)
 		return;
 	_processBatt = false;
 
-	power_adc_enable();
-
 	// let ADC settle
 	delay(100);
 
@@ -234,15 +225,12 @@ void processBattery(void)
 	_battery = analogRead(BATT_SENSE);
 	//PRINT(F("Battery: "));
 	//PRINTLN(_battery);
-
-	// shutting off the ADC between battery samples saves around 2ma
-	power_adc_disable();
 }
 
 //------------------------------------------------------------------------
 // Converts the lat/long from the GPS module, which outputs in degrees-minute
 // format to the decimal-degrees format
-double convertDegMinToDecDeg (float degMin)
+double convertDegMinToDecDeg(float degMin)
 {
 	double min = 0.0;
 	double decDeg = 0.0;

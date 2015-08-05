@@ -1,4 +1,8 @@
-#include "gpslogger.h"
+#include "storage.h"
+
+
+static char _fileName[64];
+
 
 //------------------------------------------------------------------------
 // Configures the SD card and SPI interface
@@ -131,4 +135,3 @@ bool appendLogData(const char* nmeadata)
 
 	return true;
 }
-

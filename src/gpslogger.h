@@ -33,6 +33,9 @@
 #include <SoftwareSerial.h>
 #include <Adafruit_GPS.h>
 
+#include "storage.h"
+#include "gps.h"
+
 
 //------------------------------------------------------------------------
 // Designate pins
@@ -64,6 +67,14 @@ const uint16_t FIX_TIMEOUT				= 120;
 
 
 //------------------------------------------------------------------------
+// Externals
+extern SoftwareSerial GpsSerial;
+extern Adafruit_GPS GPS;
+extern SdFat sd;
+extern Sd2Card card;
+
+
+//------------------------------------------------------------------------
 // Additional GPS module configuration strings
 #define PMTK_HOT_START			"$PMTK101*32"
 
@@ -84,6 +95,18 @@ const uint16_t FIX_TIMEOUT				= 120;
 	#define PRINT(x)
 	#define PRINTLN(x)
 #endif
+
+
+
+//------------------------------------------------------------------------
+void initializeGlobals(void);
+void initializeLogTimer(void);
+void initializeMillsInt(void);
+void snooze(void);
+void processLifespan(void);
+void processLog(void);
+void processBattery(void);
+double convertDegMinToDecDeg (float degMin);
 
 
 #endif
