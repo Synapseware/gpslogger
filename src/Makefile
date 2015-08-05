@@ -1,12 +1,13 @@
 #---------------- User options --------------------------------
-BOARD_TAG    = MT­DB­U2
-MCU			 = atmega32u2
-F_CPU		 = 16000000L
-ARDUINO_LIBS = Adafruit_GPS_Library
-BUILD_FOLDER = build-$(BOARD_TAG)
+BOARD_TAG		= mtdbu2
+ALTERNATE_CORE	= MattairTech
+MCU				= atmega32u2
+F_CPU			= 16000000L
+ARDUINO_LIBS	= Adafruit_GPS_Library SdFat
+BUILD_FOLDER	= build-$(BOARD_TAG)
 
 #Suppress output of arduino-make variables
-ARDUINO_QUIET = true
+# ARDUINO_QUIET	= true
 
 
 #---------------- Chip settings --------------------------------
