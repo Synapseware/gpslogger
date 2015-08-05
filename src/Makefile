@@ -3,7 +3,7 @@ BOARD_TAG		= mtdbu2
 ALTERNATE_CORE	= MattairTech
 MCU				= atmega32u2
 F_CPU			= 16000000L
-ARDUINO_LIBS	= Adafruit_GPS_Library SdFat SoftwareSerial
+ARDUINO_LIBS	= Adafruit_GPS_Library SdFat_20131225 SoftwareSerial
 BUILD_FOLDER	= build-$(BOARD_TAG)
 
 #Suppress output of arduino-make variables
@@ -59,40 +59,30 @@ AVRDUDE_FLAGS += $(AVRDUDE_ERASE_COUNTER)
 MSG_SIZE_BEFORE = Size before: 
 MSG_SIZE_AFTER = Size after:
 
-
 all: sizebefore
-
 
 # Display size of file.
 HEXSIZE = $(SIZE) $(BUILD_FOLDER)/src.hex
 ELFSIZE = $(SIZE) --mcu=$(MCU) --format=avr $(BUILD_FOLDER)/src.elf
 
-
-
 sizebefore:
 	@if test -f $(BUILD_FOLDER)/src.elf; then echo; echo $(MSG_SIZE_BEFORE); $(ELFSIZE); \
 	2>/dev/null; echo; fi
-
 
 sizeafter:
 	@if test -f $(TARGET).elf; then echo; echo $(MSG_SIZE_AFTER); $(ELFSIZE); \
 	2>/dev/null; echo; fi
 
-
 # Program the device.  
 program: $(BUILD_FOLDER)/src.hex $(BUILD_FOLDER)/src.eep
 	$(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)
-
 
 # Write fuse values
 wfuses:
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U lfuse:w:$(L_FUSE):m -U hfuse:w:$(H_FUSE):m -U efuse:w:$(E_FUSE):m
 
-
 rfuses:
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U hfuse:r:high.txt:h -U lfuse:r:low.txt:h -U efuse:r:ext.txt:h
 
-
 #Arduino makefile!
 include /home/matthew/src/Arduino-Makefile/Arduino.mk
-

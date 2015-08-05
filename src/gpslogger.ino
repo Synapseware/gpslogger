@@ -1,27 +1,3 @@
-#include <SdVolume.h>
-#include <SdStream.h>
-#include <SdSpi.h>
-#include <SdInfo.h>
-#include <SdFile.h>
-#include <SdFatUtil.h>
-#include <SdFatStructs.h>
-#include <SdFatmainpage.h>
-#include <SdFatConfig.h>
-#include <SdFat.h>
-#include <SdBaseFile.h>
-#include <Sd2Card.h>
-#include <ostream.h>
-#include <MinimumSerial.h>
-#include <istream.h>
-#include <iostream.h>
-#include <ios.h>
-#include <bufstream.h>
-
-#include <avr/sleep.h>
-
-#include <ArduinoStream.h>
-#include <SoftwareSerial.h>
-#include <Adafruit_GPS.h>
 #include "gpslogger.h"
 
 SoftwareSerial GpsSerial(GPS_RX, GPS_TX); // RX, TX
