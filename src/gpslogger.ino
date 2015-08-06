@@ -1,11 +1,5 @@
 #include "gpslogger.h"
 
-SoftwareSerial GpsSerial(GPS_RX, GPS_TX); // RX, TX
-Adafruit_GPS GPS(&GpsSerial);
-
-SdFat sd;
-Sd2Card card;
-
 
 volatile bool		_processBatt		= false;
 volatile bool		_secondsTick		= false;

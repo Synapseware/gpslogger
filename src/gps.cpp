@@ -1,5 +1,10 @@
 #include "gps.h"
 
+
+//SoftwareSerial GpsSerial(GPS_RX, GPS_TX); // RX, TX
+//HardwareSerial GpsSerial(&Serial1);
+Adafruit_GPS GPS(&Serial1);
+
 volatile bool _gps_enabled = true;
 static char _nmeaSentence[120];
 
@@ -31,7 +36,7 @@ void enableGPS(void)
 	while (GPS.read())
 		wdt_reset();
 
-	GpsSerial.print(0xAA);
+	Serial1.print(0xAA);
 	_gps_enabled = true;
 }
 

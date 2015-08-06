@@ -1,5 +1,11 @@
 #include "storage.h"
+#include "gps.h"
 
+
+#ifdef USE_SD
+SdFat sd;
+Sd2Card card;
+#endif
 
 static char _fileName[64];
 
@@ -8,6 +14,7 @@ static char _fileName[64];
 // Configures the SD card and SPI interface
 bool initializeSDCard(void)
 {
+	#ifdef USE_SD
 	// set date time callback function
 	SdFile::dateTimeCallback(dateTime);
 
@@ -35,6 +42,8 @@ bool initializeSDCard(void)
 	while ((r = readme.read()) > 0)
 		PRINT((char)r);
 	readme.close();
+	#endif
+
 	#endif
 
 	return true;
@@ -117,6 +126,8 @@ bool appendLogData(const char* nmeadata)
 	PRINT(F("Filename: "));
 	PRINTLN(fileName);
 
+	#ifdef USE_SD
+
 	// ensure logs directory
 	char dir[] = "/LOGS";
 	if (!sd.chdir(dir))
@@ -132,6 +143,8 @@ bool appendLogData(const char* nmeadata)
 	}
 
 	printLogData();
+
+	#endif
 
 	return true;
 }

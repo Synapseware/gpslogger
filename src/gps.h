@@ -5,6 +5,9 @@
 #include "gpslogger.h"
 
 
+extern Adafruit_GPS GPS;
+
+
 void initializeGPS(void);
 void spoolData(void);
 void enableGPS(void);

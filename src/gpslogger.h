@@ -8,29 +8,9 @@
 #include <avr/interrupt.h>
 #include <math.h>
 
-#include <SdVolume.h>
-#include <SdStream.h>
-#include <SdSpi.h>
-#include <SdInfo.h>
-#include <SdFile.h>
-#include <SdFatUtil.h>
-#include <SdFatStructs.h>
-#include <SdFatmainpage.h>
-#include <SdFatConfig.h>
-#include <SdFat.h>
-#include <SdBaseFile.h>
-#include <Sd2Card.h>
-#include <ostream.h>
-#include <MinimumSerial.h>
-#include <istream.h>
-#include <iostream.h>
-#include <ios.h>
-#include <bufstream.h>
-
 #include <avr/sleep.h>
 
 #include <ArduinoStream.h>
-#include <SoftwareSerial.h>
 #include <Adafruit_GPS.h>
 
 #include "storage.h"
@@ -48,7 +28,8 @@ const int BATT_SENSE		= 20;	//
 
 
 //------------------------------------------------------------------------
-const uint16_t MINUTES_BETWEEN_RESETS	= 24 * 60;
+const uint16_t MINUTES_BETWEEN_RESETS	= (24 * 60);
+
 
 //------------------------------------------------------------------------
 // Heartbeat delays for normal and low battery conditions
@@ -62,16 +43,10 @@ const uint16_t LOW_BATTERY				= 951;		// 3.0v
 // number of seconds between fix-capture-record events
 const uint16_t RECORDING_TIMEOUT		= (60 * 5);
 
+
 // system will sleep if no fix after timeout (seconds)
 const uint16_t FIX_TIMEOUT				= 120;
 
-
-//------------------------------------------------------------------------
-// Externals
-extern SoftwareSerial GpsSerial;
-extern Adafruit_GPS GPS;
-extern SdFat sd;
-extern Sd2Card card;
 
 
 //------------------------------------------------------------------------
