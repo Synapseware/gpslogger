@@ -25,7 +25,7 @@ void initializeGlobals(void)
 	_secondsTick		= false;
 	_fixTimeout			= FIX_TIMEOUT;
 	_recordingTimeout	= 10;
-	_lastReset			= SECONDS_BETWEEN_RESETS;
+	_lastReset			= MINUTES_BETWEEN_RESETS;
 }
 
 //------------------------------------------------------------------------
@@ -129,6 +129,12 @@ void snooze(void)
 // performs wake/sleep timeouts
 void processLifespan(void)
 {
+	static uint8_t seconds = 60;
+	if (--seconds > 0)
+		return;
+	seconds = 60;
+
+	// decrement the last-reset minutes
 	if (_lastReset > 0)
 		_lastReset--;
 
@@ -204,17 +210,18 @@ void processLog(void)
 	}
 }
 
+
 //------------------------------------------------------------------------
 // samples the battery voltage and sets the heartbeat LED to change
 // BPM based on voltage (<3.0v = 3s, >3.0v = 10s)
 void processBattery(void)
 {
-	if (!_processBatt)
-		return;
-	_processBatt = false;
+	//if (!_processBatt)
+	//	return;
+	//_processBatt = false;
 
 	// let ADC settle
-	delay(100);
+	//delay(100);
 
 	// y = (418/1.3)x - 13
 	// 1.3v = 405
@@ -222,10 +229,11 @@ void processBattery(void)
 	// 2.7v = 855
 	// 3.0v = 952
 
-	_battery = analogRead(BATT_SENSE);
+	//_battery = analogRead(BATT_SENSE);
 	//PRINT(F("Battery: "));
 	//PRINTLN(_battery);
 }
+
 
 //------------------------------------------------------------------------
 // Converts the lat/long from the GPS module, which outputs in degrees-minute

@@ -48,7 +48,7 @@ const int BATT_SENSE		= 20;	//
 
 
 //------------------------------------------------------------------------
-const uint16_t SECONDS_BETWEEN_RESETS	= 24 * 60 * 60;
+const uint16_t MINUTES_BETWEEN_RESETS	= 24 * 60;
 
 //------------------------------------------------------------------------
 // Heartbeat delays for normal and low battery conditions
