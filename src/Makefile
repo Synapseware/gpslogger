@@ -1,10 +1,11 @@
 #---------------- User options --------------------------------
-BOARD_TAG		= mtdbu2
-ALTERNATE_CORE	= MattairTech
+BOARD_TAG		= minimus32
+ALTERNATE_CORE	= minimus
 MCU				= atmega32u2
 F_CPU			= 16000000L
 ARDUINO_LIBS	= Adafruit_GPS_Library SdFat_20131225 SoftwareSerial
 BUILD_FOLDER	= build-$(BOARD_TAG)
+MTBASE			= $(HOME)/Arduino/hardware/MattairTech/avr/cores
 
 #Suppress output of arduino-make variables
 ARDUINO_QUIET	= true
