@@ -15,7 +15,8 @@ I have created this board as a project for a friend.  You are welcome to copy th
   * Eagle files
 * /media
   * Pictures of the board through development to final packaging
-* /sketchbookfolder/gpslogger
+* /src
   * Project source
-* /sketchbookfolder/libraries
-  * 3rd party Arduino libraries
+
+This board uses custom 3rd party hardware variants from [Minimus](http://wiki.leedshackspace.org.uk/wiki/Minimus).  Their github wiki is [here](https://github.com/pbrook/minimus-arduino/wiki).  The minimus32 is an Arduino hardware variant based on the ATMega32u2.
+
