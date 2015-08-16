@@ -18,7 +18,13 @@ F_CPU        = 32000000
 F_USB        = 48000000
 OPTIMIZATION = s
 TARGET       = gpslogger
-SRC          = $(TARGET).c Descriptors.c $(LUFA_SRC_USB) $(LUFA_SRC_USBCLASS)
+SRC          = $(TARGET).c \
+				Descriptors.c \
+				Drivers/AdafruitGps.c \
+				Drivers/TC_driver.c \
+				$(LUFA_SRC_USB) \
+				$(LUFA_SRC_USBCLASS) \
+				$(LUFA_SRC_SERIAL)
 LUFA_PATH    = ../LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS     =

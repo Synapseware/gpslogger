@@ -1,6 +1,7 @@
 #include "gpslogger.h"
 
 
+volatile int8_t _secondsTick = 0;
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -38,6 +39,41 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
  */
 static FILE USBSerialStream;
 
+/** Configure timer for 1 second delay with interrupts */
+void Timer_Initialize(void)
+{
+	/*
+	// configure timer/counter0 (clk/64)
+	TC0_t.CTRLA = TC_CLKSEL_t.TC_CLKSEL_DIV1024_gc;
+
+	// set up for FRQ
+	TC0_t.CTRLB = TC_WGMODE_FRQ_gc;
+
+	// Clear remaining control registers
+	TC0_t.CTRLC = 0;
+	TC0_t.CTRLD = TC_EVACT_OFF_gc | TC_EVSEL_OFF_gc;
+	TC0_t.CTRLE = TC_BYTEM_NORMAL_gc;
+
+	// Configure interrupts
+	TC0_t.INTCTRLA = TC_ERRINTLVL_OFF_gc | TC_OVFINTLVL_OFF_gc;
+
+	// Compare/Capture A Interrupt Level
+	TC0_t.INTCTRLB = TC_CCAINTLVL_enum.TC_CCAINTLVL_HI_gc;
+
+	// configure the period
+	TC0_t.PER   = F_CPU / 1024;
+	*/
+
+	/* Set period/TOP value. */
+	TC_SetPeriod( &TCC0, F_CPU / 1024 );
+
+	/* Select clock source. */
+	TC0_ConfigClockSource( &TCC0, TC_CLKSEL_DIV1024_gc );
+
+	/* Setup interrupts for Compare/Capture A */
+	TC0_SetCCAIntLevel( &TCC0, TC_CCAINTLVL_HI_gc );
+}
+
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
@@ -73,6 +109,7 @@ int main(void)
 /** Configures the board hardware and chip peripherals for the application's functionality. */
 void SetupHardware(void)
 {
+
 	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
 	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
 	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
@@ -89,6 +126,8 @@ void SetupHardware(void)
 	// initialize user hardware here
 	(LED_PORT)->OUTCLR = LED_PIN;
 	(LED_PORT)->DIRSET = LED_PIN;
+
+	Timer_Initialize();
 }
 
 /** Event handler for the library USB Connection event. */
@@ -124,3 +163,11 @@ void EVENT_USB_Device_ControlRequest(void)
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
+/** Interrupt handler for TCC0 Compare/Capture A */
+ISR(TCC0_CCA_vect)
+{
+	_secondsTick = 1;
+
+	// toggle the onboard LED
+	(LED_PORT)->OUTTGL = LED_PIN;
+}
