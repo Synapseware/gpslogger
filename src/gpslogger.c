@@ -54,8 +54,16 @@ int main(void)
 	// to receive data from the CDC:
 	// CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
+	char * msg = "Hello.";
+	fputs(msg, &USBSerialStream);
+
 	for (;;)
 	{
+		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
+		CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+
+
+		/* Required calls */		
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 	}

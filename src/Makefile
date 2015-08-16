@@ -14,7 +14,7 @@
 MCU          = atxmega128a4u
 ARCH         = XMEGA
 BOARD        = USER
-F_CPU        = 8000000
+F_CPU        = 32000000
 F_USB        = 48000000
 OPTIMIZATION = s
 TARGET       = gpslogger
@@ -36,3 +36,8 @@ include $(LUFA_PATH)/Build/lufa_dfu.mk
 include $(LUFA_PATH)/Build/lufa_hid.mk
 include $(LUFA_PATH)/Build/lufa_avrdude.mk
 include $(LUFA_PATH)/Build/lufa_atprogram.mk
+
+
+program:
+	avrdude -p $(MCU) -P usb -c avrisp2 -U flash:w:$(TARGET).hex
+
