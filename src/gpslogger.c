@@ -54,7 +54,7 @@ int main(void)
 	// to receive data from the CDC:
 	// CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
-	char * msg = "Hello.\n";
+	char * msg = "Hello.\r\n";
 	fputs(msg, &USBSerialStream);
 
 	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
@@ -95,7 +95,7 @@ void SetupHardware(void)
 void EVENT_USB_Device_Connect(void)
 {
 	//LEDs_SetAllLEDs(LEDMASK_USB_ENUMERATING);
-	(LED_PORT)->OUTSET = LED_PIN;
+	//(LED_PORT)->OUTSET = LED_PIN;
 }
 
 /** Event handler for the library USB Disconnection event. */
@@ -113,6 +113,9 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
 
 	LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
+
+	if (ConfigSuccess)
+		(LED_PORT)->OUTSET = LED_PIN;
 }
 
 /** Event handler for the library USB Control Request reception event. */

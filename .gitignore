@@ -7,24 +7,12 @@ high.txt
 TcfTransactionLog.csv
 **.directory
 
-#Ignore AVR Studio and Visual Studio files
-[Dd]ebug/
-[Rr]elease/
-*.suo
-*.avrsuo
-*.atsuo
-*.user
 #Ignore files produced by Eagle
 *.b#*
 *.l#*
 *.s#*
 *.avw
 eagleup/
-Visual Micro/
-**.vcxproj.filters
-**.opensdf
-**.sdf
-~*.*
 
 #Ignore specific arduino release folders
 arduino/arduino-1.0.5/
