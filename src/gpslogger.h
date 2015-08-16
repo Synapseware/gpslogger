@@ -18,6 +18,14 @@
 #include <LUFA/Platform/Platform.h>
 
 
+#define LED_PORT	&PORTE
+#define LED_PIN		(1 << 1)
+
+#define LED_RED		(1<<1)
+#define LED_YLW		(1<<0)
+
+
+
 /* Function Prototypes: */
 void SetupHardware(void);
 
