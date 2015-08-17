@@ -2,6 +2,12 @@
 #define __ADAFRUIT_GPS__
 
 
+
+#include <LUFA/Drivers/Peripheral/Serial.h>
+#include <LUFA/Drivers/Misc/RingBuffer.h>
+
+
+
 // different commands to set the update rate from once a second (1 Hz) to 10 times a second (10Hz)
 #define PMTK_SET_NMEA_UPDATE_1HZ  "$PMTK220,1000*1F"
 #define PMTK_SET_NMEA_UPDATE_5HZ  "$PMTK220,200*2C"
@@ -45,6 +51,18 @@
 
 // how long to wait when we're looking for a response
 #define MAXWAITSENTENCE 5
+
+
+typedef void (*Adafruit_GPS_OnMessageReceived_t)(char*);
+
+void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin);
+void Adafruit_GPS_EnableGPS(void);
+void Adafruit_GPS_DisableGPS(void);
+void Adafruit_GPS_SetupGPS(void);
+void Adafruit_GPS_SendCommand(const char* command);
+void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
+int8_t Adafruit_GPS_MessageAvailable(void);
+uint16_t Adafruit_GPS_BufferSize(void);
 
 
 #endif

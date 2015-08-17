@@ -10,24 +10,29 @@
 # --------------------------------------
 
 # Run "make help" for target help.
+FUSE_1			= 0x00
+FUSE_2			= 0xDF
+FUSE_4			= 0xFF
+FUSE_5			= 0xFF
 
-MCU          = atxmega128a4u
-ARCH         = XMEGA
-BOARD        = USER
-F_CPU        = 32000000
-F_USB        = 48000000
-OPTIMIZATION = s
-TARGET       = gpslogger
-SRC          = $(TARGET).c \
+
+MCU				= atxmega128a4u
+ARCH			= XMEGA
+BOARD			= USER
+F_CPU			= 32000000
+F_USB			= 48000000
+OPTIMIZATION	= s
+TARGET			= gpslogger
+SRC				= $(TARGET).c \
 				Descriptors.c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL)
-LUFA_PATH    = ../LUFA
-CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
-LD_FLAGS     =
+LUFA_PATH		= ../LUFA
+CC_FLAGS		= -DUSE_LUFA_CONFIG_HEADER -IConfig/
+LD_FLAGS		= 
 
 # Default target
 all:
@@ -44,6 +49,6 @@ include $(LUFA_PATH)/Build/lufa_avrdude.mk
 include $(LUFA_PATH)/Build/lufa_atprogram.mk
 
 
-program:
+program: all
 	avrdude -p $(MCU) -P usb -c avrisp2 -U flash:w:$(TARGET).hex
 
