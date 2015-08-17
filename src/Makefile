@@ -16,12 +16,12 @@ FUSE_4			= 0xFF
 FUSE_5			= 0xFF
 
 
-MCU				= atxmega128a4u
+MCU			= atxmega128a4u
 ARCH			= XMEGA
 BOARD			= USER
 F_CPU			= 32000000
 F_USB			= 48000000
-OPTIMIZATION	= s
+OPTIMIZATION		= s
 TARGET			= gpslogger
 SRC				= $(TARGET).c \
 				Descriptors.c \
@@ -30,7 +30,7 @@ SRC				= $(TARGET).c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL)
-LUFA_PATH		= ../LUFA
+LUFA_PATH		= ../LUFA/
 CC_FLAGS		= -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS		= 
 
