@@ -16,6 +16,7 @@ eagleup/
 
 #Ignore specific arduino release folders
 arduino/arduino-1.0.5/
+src/build-*
 
 #Ignore build artifacts
 *.o
