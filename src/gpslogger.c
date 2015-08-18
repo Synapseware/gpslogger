@@ -54,19 +54,37 @@ void Timer_Initialize(void)
 
 	/* Setup interrupts for Compare/Capture A */
 	TCC0.CCB = F_CPU / 1024 * 0.05;
-	TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );}
+	TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
+}
+
 
 /** Sends a greeting to the host if the host is connected */
 void sendGreeting(void)
 {
+	char msg[128] = "Hello.\r\n";
+
+	char page[256];
+	read_block(SPI_CS, 0, sizeof(page), page);
+	for(int i = 0; i < sizeof(page); i += 2)
+	{
+		sprintf_P(msg, PSTR("0x%0X, 0x%0X, "), page[i], page[i+1]);
+		fputs(msg, &USBSerialStream);
+		if (i % 8 == 0)
+		{
+			sprintf_P(msg, PSTR("\r\n"));
+			fputs(msg, &USBSerialStream);
+		}
+	}
+
+
 	static int8_t sent = 0;
 	if (!_hostConnected || sent)
 		return;
 
-	char * msg = "Hello.\r\n";
 	fputs(msg, &USBSerialStream);
-	sent = 1;	
+	sent = 1;
 }
+
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.

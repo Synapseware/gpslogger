@@ -77,6 +77,7 @@ int8_t Adafruit_GPS_MessageAvailable(void)
 	return _message_rdy;
 }
 
+
 /** Returns data from the receive buffer */
 int Adafruit_GPS_Read(void)
 {
