@@ -58,7 +58,6 @@ typedef void (*Adafruit_GPS_OnMessageReceived_t)(char*);
 void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin);
 void Adafruit_GPS_EnableGPS(void);
 void Adafruit_GPS_DisableGPS(void);
-void Adafruit_GPS_SetupGPS(void);
 void Adafruit_GPS_SendCommand(const char* command);
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
 int8_t Adafruit_GPS_MessageAvailable(void);

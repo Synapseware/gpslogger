@@ -19,8 +19,6 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 	_en_port	= en_port;
 	_en_pin		= en_pin;
 
-	(_en_port)->OUTCLR = _en_pin;
-
 	// Initialize the USART ring buffer with the created storage array
 	RingBuffer_InitBuffer(&Buffer, BufferData, sizeof(BufferData));
 
@@ -28,7 +26,7 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 	Serial_Init(_usart, 9600, false);
 
 	// enable specific USART interrupts
-	(_usart)->CTRLA = USART_RXCINTLVL_MED_gc |
+	_usart->CTRLA = USART_RXCINTLVL_MED_gc |
 					  USART_TXCINTLVL_OFF_gc |
 					  USART_DREINTLVL_OFF_gc;
 }
@@ -37,16 +35,17 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 /** Enable the GPS */
 void Adafruit_GPS_EnableGPS(void)
 {
-	// set the GPS enable pin to output (initialized to LOW level)
-	(_en_port)->OUTSET = _en_pin;
+	// set the GPS enable pin to input (high-z)
+	_en_port->DIRCLR = _en_pin;
 }
 
 
 /** Disable the GPS */
 void Adafruit_GPS_DisableGPS(void)
 {
-	// set the GPS enable pin to input (high-z)
-	(_en_port)->OUTCLR = _en_pin;
+	// set the GPS enable pin to output (initialized to LOW level)
+	_en_port->OUTCLR = _en_pin;
+	_en_port->DIRSET = _en_pin;
 }
 
 
@@ -78,6 +77,7 @@ int8_t Adafruit_GPS_MessageAvailable(void)
 	return _message_rdy;
 }
 
+
 /** Returns data from the receive buffer */
 int Adafruit_GPS_Read(void)
 {
@@ -102,7 +102,7 @@ int Adafruit_GPS_Read(void)
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
-	uint8_t data = (_usart)->DATA;
+	uint8_t data = _usart->DATA;
 
 	if ('\n' == data)
 	{

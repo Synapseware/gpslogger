@@ -54,19 +54,37 @@ void Timer_Initialize(void)
 
 	/* Setup interrupts for Compare/Capture A */
 	TCC0.CCB = F_CPU / 1024 * 0.05;
-	TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );}
+	TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
+}
+
 
 /** Sends a greeting to the host if the host is connected */
 void sendGreeting(void)
 {
+	char msg[128] = "Hello.\r\n";
+
+	char page[256];
+	read_block(SPI_CS, 0, sizeof(page), page);
+	for(int i = 0; i < sizeof(page); i += 2)
+	{
+		sprintf_P(msg, PSTR("0x%0X, 0x%0X, "), page[i], page[i+1]);
+		fputs(msg, &USBSerialStream);
+		if (i % 8 == 0)
+		{
+			sprintf_P(msg, PSTR("\r\n"));
+			fputs(msg, &USBSerialStream);
+		}
+	}
+
+
 	static int8_t sent = 0;
 	if (!_hostConnected || sent)
 		return;
 
-	char * msg = "Hello.\r\n";
 	fputs(msg, &USBSerialStream);
-	sent = 1;	
+	sent = 1;
 }
+
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
@@ -135,12 +153,27 @@ void SetupHardware(void)
 	USB_Init();
 
 	// initialize user hardware here
-	(LED_PORT)->OUTCLR = LED_PIN;
-	(LED_PORT)->DIRSET = LED_PIN;
+	LED_PORT->OUTCLR = LED_PIN;
+	LED_PORT->DIRSET = LED_PIN;
 
+	// intialize the GPS module
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
+	
+	Adafruit_GPS_DisableGPS();
+
+
+	// Initialize the SPI device for the flash chip
+	SPI_Init(&SPI_DEVICE,
+		SPI_SPEED_FCPU_DIV_2 |
+		SPI_ORDER_MSB_FIRST |
+		SPI_SCK_LEAD_FALLING |
+		SPI_SAMPLE_TRAILING |
+		SPI_MODE_MASTER
+	);
+
+	Initialize_FlashDriver(&SPI_DEVICE, SPI_PORT, SPI_CS);
 
 	Timer_Initialize();
 }
