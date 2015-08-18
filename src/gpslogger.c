@@ -135,12 +135,27 @@ void SetupHardware(void)
 	USB_Init();
 
 	// initialize user hardware here
-	(LED_PORT)->OUTCLR = LED_PIN;
-	(LED_PORT)->DIRSET = LED_PIN;
+	LED_PORT->OUTCLR = LED_PIN;
+	LED_PORT->DIRSET = LED_PIN;
 
+	// intialize the GPS module
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
+	
+	Adafruit_GPS_DisableGPS();
+
+
+	// Initialize the SPI device for the flash chip
+	SPI_Init(&SPI_DEVICE,
+		SPI_SPEED_FCPU_DIV_2 |
+		SPI_ORDER_MSB_FIRST |
+		SPI_SCK_LEAD_FALLING |
+		SPI_SAMPLE_TRAILING |
+		SPI_MODE_MASTER
+	);
+
+	Initialize_FlashDriver(&SPI_DEVICE, SPI_PORT, SPI_CS);
 
 	Timer_Initialize();
 }

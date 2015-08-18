@@ -12,6 +12,7 @@
 #include "Descriptors.h"
 
 #include <LUFA/Drivers/Peripheral/Serial.h>
+#include <LUFA/Drivers/Peripheral/SPI.h>
 #include <LUFA/Drivers/Board/LEDs.h>
 #include <LUFA/Drivers/Board/Board.h>
 #include <LUFA/Drivers/USB/USB.h>
@@ -20,20 +21,26 @@
 
 #include "Drivers/AdafruitGps.h"
 #include "Drivers/TC_driver.h"
+#include "Drivers/at25df321.h"
 
 
-#define LED_PORT		&PORTE
-#define LED_PIN			(1 << 1)
+#define LED_PORT		(&PORTE)
+#define LED_PIN			PIN1_bm
 
 
-#define GPS_UART_port	&PORTE
-#define GPS_RX_pin		(1 << 2)
-#define GPS_TX_pin		(1 << 3)
+#define GPS_UART_port	(&PORTE)
+#define GPS_RX_pin		PIN2_bm
+#define GPS_TX_pin		PIN3_bm
 #define GPS_USART		(&USARTE0)
 
 
-#define GPS_EN_port		&PORTD
-#define GPS_EN_pin		(1 << 0)
+#define GPS_EN_port		(&PORTC)
+#define GPS_EN_pin		PIN1_bm
+
+
+#define SPI_DEVICE		SPID
+#define SPI_PORT		(&PORTD)
+#define SPI_CS			PIN4_bm
 
 
 
