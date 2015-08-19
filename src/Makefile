@@ -25,6 +25,7 @@ OPTIMIZATION		= s
 TARGET			= gpslogger
 SRC				= $(TARGET).c \
 				Descriptors.c \
+				NMEAParser.c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				Drivers/at25df321.c \

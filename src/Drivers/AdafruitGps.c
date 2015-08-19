@@ -99,6 +99,22 @@ int Adafruit_GPS_Read(void)
 }
 
 
+/** Looks into the NMEA sentence for fix data */
+char Adafruit_GPS_HasFix(const char* nmea)
+{
+	if (NULL == nmea || nmea != strstr(nmea, "$GPRMC"))
+	{
+		return '\0';
+	}
+
+	// look for the A or V in
+	// "$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A"
+	strtok(nmea, ',')
+
+	return 'V';
+}
+
+
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {

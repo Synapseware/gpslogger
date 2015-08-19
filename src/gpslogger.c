@@ -35,10 +35,12 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 			},
 	};
 
+
 /** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
  *  used like any regular character stream in the C APIs.
  */
 static FILE USBSerialStream;
+
 
 /** Configure timer for 1 second delay with interrupts */
 void Timer_Initialize(void)

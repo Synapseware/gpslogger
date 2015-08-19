@@ -62,6 +62,7 @@ void Adafruit_GPS_SendCommand(const char* command);
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
 int8_t Adafruit_GPS_MessageAvailable(void);
 uint16_t Adafruit_GPS_BufferSize(void);
+void Adafruit_GPS_HasFix(const char* nmea);
 
 
 #endif
