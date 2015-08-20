@@ -1,8 +1,17 @@
 #include "gpslogger.h"
 
 
-volatile int8_t _secondsTick = 0;
-volatile int8_t _hostConnected = 0;
+/** Lifecycle and USB flags */
+volatile int8_t		_secondsTick		= 0;
+volatile int8_t		_hostConnected		= 0;
+
+
+/** NMEA processing data & flags */
+static char			_nmea[128];
+static uint8_t		_saveNMEA			= 0;
+static bool			_hasFix				= false;
+
+
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -87,6 +96,60 @@ void sendGreeting(void)
 	sent = 1;
 }
 
+/** Callback function which is invoked when a complete message is received */
+void HandleLatestGpsMessage(void)
+{
+	memset(_nmea, 0, sizeof(_nmea));
+
+	// copy the latest message
+	int data	= 0;
+	int idx		= 0;
+
+	while (0 != (data = Adafruit_GPS_Read()) && idx < sizeof(_nmea))
+	{
+		_nmea[idx++] = data;
+	}
+
+	// check min-length
+	if (idx < 6)
+	{
+		// nothing to do
+		return;
+	}
+
+	if (0 == strcmp(_nmea, "$GPGGA"))
+	{
+		// location data - save to flash!
+	}
+	else if (0 == strcmp(_nmea, "$GPRMC"))
+	{
+		// process fix data - look for 'V' or 'A'
+		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
+		// no fix:		$GPRMC,072450.000,V,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
+		char* p = strchr(_nmea, ',') + 1;
+		/*
+		float timef = atof(p);
+		uint32_t time = timef;
+		int hour = time / 10000;
+		int minute = (time % 10000) / 100;
+		int seconds = (time % 100);
+		int milliseconds = fmod(timef, 1.0) * 1000;
+		*/
+		p = strstr(p, ',') + 1;
+		if ('A' == p[0])
+			_hasFix = true;
+		else if ('V' == p[0])
+			_hasFix = false;
+		else
+			return;	// invalid state
+	}
+	else if (0 == strcmp(_nmea, "$PMTK"))
+	{
+		// GPS module status info
+		// process any status messages from the GPS
+	}
+}
+
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
@@ -115,18 +178,7 @@ int main(void)
 
 		if (Adafruit_GPS_MessageAvailable())
 		{
-			uint8_t idx = 0;
-			int data = 0;
-			while (0 != (data = Adafruit_GPS_Read()))
-			{
-				msg[idx++] = data;
-			}
-			msg[idx++] = '\r';
-			msg[idx++] = '\n';
-			msg[idx++] = 0;
-
-			// write the latest GPS data to the host
-			fputs(msg, &USBSerialStream);
+			HandleLatestGpsMessage();
 		}
 
 		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */

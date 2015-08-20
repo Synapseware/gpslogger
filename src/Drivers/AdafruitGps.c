@@ -2,14 +2,20 @@
 
 
 /** Globals */
-USART_t	*	_usart			= 0;
-PORT_t	*	_en_port		= 0;
-uint8_t		_en_pin			= 0;
-int8_t		_message_rdy	= 0;
+USART_t	*		_usart			= 0;
+PORT_t	*		_en_port		= 0;
+uint8_t			_en_pin			= 0;
+int8_t			_message_rdy	= 0;
 
 /** Create the buffer structure and its underlying storage array */
-RingBuffer_t Buffer;
-uint8_t      BufferData[256];
+RingBuffer_t	Buffer;
+uint8_t			BufferData[256];
+int				BufferIndex		= 0;
+
+
+/** Message ready callback function */
+Adafruit_GPS_OnMessageReceived_t _onMessageReady = NULL;
+
 
 
 /** Initialize the Adafruit GPS library */
@@ -27,8 +33,8 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 
 	// enable specific USART interrupts
 	_usart->CTRLA = USART_RXCINTLVL_MED_gc |
-					  USART_TXCINTLVL_OFF_gc |
-					  USART_DREINTLVL_OFF_gc;
+					USART_TXCINTLVL_OFF_gc |
+					USART_DREINTLVL_OFF_gc;
 }
 
 
@@ -60,6 +66,7 @@ void Adafruit_GPS_SendCommand(const char* command)
 /** Reads a string of data from the GPS device */
 uint16_t Adafruit_GPS_BufferSize(void)
 {
+	// return the ring buffer count
 	return RingBuffer_GetCount(&Buffer);
 }
 
@@ -67,13 +74,15 @@ uint16_t Adafruit_GPS_BufferSize(void)
 /** Gets called when a message from the GPS module is available */
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 {
-
+	// assign message handler
+	_onMessageReady = handler;
 }
 
 
 /** Returns 1 if a message is available, otherwise returns 0 */
 int8_t Adafruit_GPS_MessageAvailable(void)
 {
+	// return message avail flag
 	return _message_rdy;
 }
 
@@ -99,22 +108,6 @@ int Adafruit_GPS_Read(void)
 }
 
 
-/** Looks into the NMEA sentence for fix data */
-char Adafruit_GPS_HasFix(const char* nmea)
-{
-	if (NULL == nmea || nmea != strstr(nmea, "$GPRMC"))
-	{
-		return '\0';
-	}
-
-	// look for the A or V in
-	// "$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A"
-	strtok(nmea, ',')
-
-	return 'V';
-}
-
-
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
@@ -124,6 +117,9 @@ ISR(USARTE0_RXC_vect)
 	{
 		_message_rdy = 1;
 		RingBuffer_Insert(&Buffer, 0);
+
+		if (NULL != _onMessageReady)
+			_onMessageReady();
 	}
 	else
 	{

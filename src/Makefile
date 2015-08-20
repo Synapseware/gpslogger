@@ -16,7 +16,7 @@ FUSE_4			= 0xFF
 FUSE_5			= 0xFF
 
 
-MCU			= atxmega128a4u
+MCU				= atxmega128a4u
 ARCH			= XMEGA
 BOARD			= USER
 F_CPU			= 32000000
@@ -25,7 +25,6 @@ OPTIMIZATION		= s
 TARGET			= gpslogger
 SRC				= $(TARGET).c \
 				Descriptors.c \
-				NMEAParser.c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				Drivers/at25df321.c \

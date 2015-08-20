@@ -11,9 +11,9 @@
 void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
 
 /** Writes a block of bytes to the flash device */
-int write_block(uint8_t chip_cs, uint32_t address, int count, const uint8_t * pbuff);
+int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff);
 
 /** Reads a block of bytes from the flash device */
-int read_block(uint8_t chip_cs, uint32_t address, int count, uint8_t* pbuff);
+int read_block(uint8_t chip_cs, uint32_t address, int count, char* pbuff);
 
 #endif

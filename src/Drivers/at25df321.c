@@ -205,7 +205,7 @@ int erase_chip(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
-int write_block(uint8_t chip_cs, uint32_t address, int count, const uint8_t * pbuff)
+int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
 {
 	_spi_port->OUTCLR = chip_cs;
 	SPI_TransferByte(_spi_dev, 0x02);
@@ -226,7 +226,7 @@ int write_block(uint8_t chip_cs, uint32_t address, int count, const uint8_t * pb
 
 // -------------------------------------------------------------------------------------------------------------------------
 // reads 'count' bytes into 'pbuff' array and returns the number of bytes read
-int read_block(uint8_t chip_cs, uint32_t address, int count, uint8_t* pbuff)
+int read_block(uint8_t chip_cs, uint32_t address, int count, char * pbuff)
 {
 	_spi_port->OUTCLR = chip_cs;
 
