@@ -1,6 +1,7 @@
 #include "AdafruitGps.h"
 
 
+
 /** Globals */
 USART_t	*	_usart			= 0;
 PORT_t	*	_en_port		= 0;

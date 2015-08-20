@@ -32,3 +32,13 @@ I have created this board as a project for a friend.  You are welcome to copy th
     $GPRMC,072452.000,A,4078.8164,N,10921.9608,W,0.21,355.98,170815,,,A*78
     $GPGGA,072453.000,4078.8163,N,10921.9607,W,1,10,1.01,104.0,M,-17.3,M,,*54
     $GPRMC,072453.000,A,4078.8163,N,10921.9607,W,0.32,355.98,170815,,,A*73
+
+
+## Rules for Saving Log Data
+
+* Wakeup and get a fix every 5 mintues
+* Stop trying to get fix data after xx seconds
+    - prevent system from getting stuck without satellite data
+* Each NMEA sentence is truncated to 127 bytes (+1 \0 byte)
+* 2 NMEA sentences are saved to the flash together in a single page-write operation
+* Fix data is parsed from GPRMC message
