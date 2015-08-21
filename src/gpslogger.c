@@ -4,13 +4,12 @@
 /** Lifecycle and USB flags */
 volatile int8_t		_secondsTick		= 0;
 volatile int8_t		_hostConnected		= 0;
+volatile int32_t	_flashWriteAddr		= 0;
 
 
 /** NMEA processing data & flags */
-static char			_nmea[128];
-static uint8_t		_saveNMEA			= 0;
+static char			_nmea[256];
 static bool			_hasFix				= false;
-
 
 
 
@@ -69,7 +68,7 @@ void Timer_Initialize(void)
 }
 
 
-/** Sends a greeting to the host if the host is connected */
+/** Sends a greeting to the host if the host is connected
 void sendGreeting(const char* message)
 {
 	if (NULL == message)
@@ -80,34 +79,91 @@ void sendGreeting(const char* message)
 
 	fputs(message, &USBSerialStream);
 }
+*/
+
+/** Finds the first free page in the dataflash chip */
+int32_t FindFirstFreeAddress(void)
+{
+	uint32_t address = 0;
+	for (int i = 0; i < FLASH_PAGE_COUNT; i += FLASH_PAGE_SIZE)
+	{
+		// compute next read address
+		address = i * FLASH_PAGE_SIZE;
+
+		// read the specific block of data from the dataflash
+		read_block(SPI_CS, address, sizeof(_nmea), _nmea);
+
+		// check if the whole block is initialized (all bytes = 0xFF)
+		bool blockIsValid = true;
+		for (int j = 0; j < sizeof(_nmea); j++)
+		{
+			if (0xFF != _nmea[j])
+			{
+				blockIsValid = false;
+				break;
+			}
+		}
+
+		if (blockIsValid)
+		{
+			// found an empty block, let's start here
+			return address;
+		}
+	}
+
+	// no wholly initialized blocks available!
+	return -1;
+}
 
 
 /** Callback function which is invoked when a complete message is received */
 void HandleLatestGpsMessage(void)
 {
+	// initialize the NMEA buffer before we capture the latest string
 	memset(_nmea, 0, sizeof(_nmea));
 
 	// copy the latest message
 	int data	= 0;
 	int idx		= 0;
 
+	// spool all the data from the GPS buffer
 	while (0 != (data = Adafruit_GPS_Read()) && idx < sizeof(_nmea))
 	{
 		_nmea[idx++] = data;
 	}
 
 	// check min-length
-	if (idx < 6)
+	if (idx < 5)
 	{
 		// nothing to do
 		return;
 	}
 
-	if (0 == strcmp(_nmea, "$GPGGA"))
+	// parse specific messages
+	if (0 == strncmp(_nmea, "$GPGGA", 6))
 	{
 		// location data - save to flash!
+		if (!_hasFix)
+		{
+			// don't log anything unless we have a satellite fix
+			return;
+		}
+
+		// If the flash write address less than 0, then no free pages remain - don't write the data
+		if (_flashWriteAddr < 0)
+		{
+			return;
+		}
+
+		// TODO:
+		// Once we write data to the flash chip, the GPS should be disabled
+		Adafruit_GPS_Suspend();
+
+		// write latest message to flash
+		write_block(SPI_CS, _flashWriteAddr, sizeof(_nmea), _nmea);
+		_flashWriteAddr += sizeof(_nmea);
 	}
-	else if (0 == strcmp(_nmea, "$GPRMC"))
+	else if (0 == strncmp(_nmea, "$GPRMC", 6))
 	{
 		// process fix data - look for 'V' or 'A'
 		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
@@ -129,7 +185,7 @@ void HandleLatestGpsMessage(void)
 		else
 			return;	// invalid state
 	}
-	else if (0 == strcmp(_nmea, "$PMTK"))
+	else if (0 == strncmp(_nmea, "$PMTK", 5))
 	{
 		// GPS module status info
 		// process any status messages from the GPS
@@ -147,23 +203,16 @@ int main(void)
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
-	
+	/* Locate the first initialzed page address in the flash storage device */
+	_flashWriteAddr = FindFirstFreeAddress();
 
 	GlobalInterruptEnable();
 
 	// to receive data from the CDC:
 	// CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-	char msg[257];
-	msg[sizeof(msg)-1] = 0;
 
 	for (;;)
 	{
-		if (_secondsTick)
-		{
-			sendGreeting("Hello\r\n");
-			_secondsTick = 0;
-		}
-
 		if (Adafruit_GPS_MessageAvailable())
 		{
 			HandleLatestGpsMessage();

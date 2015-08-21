@@ -1,9 +1,9 @@
 #include "at25df321.h"
 
 
-volatile	SPI_t*		_spi_dev;
-volatile	PORT_t*		_spi_port;
-volatile	uint8_t		_chip_cs;
+SPI_t*		_spi_dev;
+PORT_t*		_spi_port;
+uint8_t		_chip_cs;
 
 /*
 	uint8_t read_status_register(void);
@@ -70,7 +70,7 @@ uint8_t write_succeeded(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Enable writes by setting the write enable bit
-inline void write_enable(uint8_t chip_cs)
+void write_enable(uint8_t chip_cs)
 {
 	// write 06h to the chip to enable the write mode
 	_spi_port->OUTCLR = chip_cs;
@@ -80,7 +80,7 @@ inline void write_enable(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Disable writes by clearing the write enable bit
-inline void write_disable(uint8_t chip_cs)
+void write_disable(uint8_t chip_cs)
 {
 	// write 04h to the chip to disable the write mode
 	_spi_port->OUTCLR = chip_cs;
@@ -115,7 +115,7 @@ void global_unprotect(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
 	SPI_TransferByte(_spi_dev, 0x01);				// allow setting of the SPRL bit and the global protect/unprotect flags
-	SPI_transferByte(
+	SPI_TransferByte(
 		_spi_dev,
 		(0<<7) |					// SPRL bit.  0 = unlocked (default), 1 = locked
 		(0<<5) |					// bits 5:2 must be cleared

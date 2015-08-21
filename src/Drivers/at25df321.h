@@ -5,7 +5,15 @@
 #include <avr/io.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
+
+
+#define	FLASH_TOTAL_SIZE		(4U * 1024U * 1024U)
+#define	FLASH_PAGE_SIZE			256
+#define	FLASH_PAGE_COUNT		(FLASH_TOTAL_SIZE / FLASH_PAGE_SIZE)
+
+
 
 /** Initializes the flash driver & IO hardware */
 void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
@@ -15,7 +23,5 @@ int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff
 
 /** Reads a block of bytes from the flash device */
 int read_block(uint8_t chip_cs, uint32_t address, int count, char* pbuff);
-
-void global_unprotect(uint8_t chip_cs);
 
 #endif
