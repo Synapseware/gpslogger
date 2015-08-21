@@ -53,7 +53,7 @@
 #define MAXWAITSENTENCE 5
 
 
-typedef void (*Adafruit_GPS_OnMessageReceived_t)(char*);
+typedef void (*Adafruit_GPS_OnMessageReceived_t)(void);
 
 void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin);
 void Adafruit_GPS_EnableGPS(void);
