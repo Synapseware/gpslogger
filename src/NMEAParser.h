@@ -4,9 +4,11 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 
-int8_t ParseNMEA_Sentence(const char* sentence);
+
+char* ParseNMEA_Sentence(const char* sentence);
 
 
 

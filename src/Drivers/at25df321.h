@@ -16,4 +16,6 @@ int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff
 /** Reads a block of bytes from the flash device */
 int read_block(uint8_t chip_cs, uint32_t address, int count, char* pbuff);
 
+void global_unprotect(uint8_t chip_cs);
+
 #endif

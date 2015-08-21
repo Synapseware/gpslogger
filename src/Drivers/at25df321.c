@@ -29,7 +29,7 @@ void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 
 	// enable output on the CS pin
 	_spi_port->OUTSET = cs;
-	_spi_port->DIR = cs;
+	_spi_port->DIRSET = cs;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

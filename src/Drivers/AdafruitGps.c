@@ -109,6 +109,22 @@ int Adafruit_GPS_Read(void)
 }
 
 
+/** Suspend the the GPS to save power */
+void Adafruit_GPS_Suspend(void)
+{
+	// issue the PMTK suspend command message
+	Adafruit_GPS_SendCommand(PMTK_STANDBY);
+}
+
+
+/** Wakeup the GPS from a previous suspend */
+void Adafruit_GPS_Wakeup(void)
+{
+	// issue the PMTK awake command
+	Adafruit_GPS_SendCommand(PMTK_AWAKE);
+}
+
+
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {

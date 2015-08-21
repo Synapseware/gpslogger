@@ -70,31 +70,17 @@ void Timer_Initialize(void)
 
 
 /** Sends a greeting to the host if the host is connected */
-void sendGreeting(void)
+void sendGreeting(const char* message)
 {
-	char msg[128] = "Hello.\r\n";
-
-	char page[256];
-	read_block(SPI_CS, 0, sizeof(page), page);
-	for(int i = 0; i < sizeof(page); i += 2)
-	{
-		sprintf_P(msg, PSTR("0x%0X, 0x%0X, "), page[i], page[i+1]);
-		fputs(msg, &USBSerialStream);
-		if (i % 8 == 0)
-		{
-			sprintf_P(msg, PSTR("\r\n"));
-			fputs(msg, &USBSerialStream);
-		}
-	}
-
-
-	static int8_t sent = 0;
-	if (!_hostConnected || sent)
+	if (NULL == message)
 		return;
 
-	fputs(msg, &USBSerialStream);
-	sent = 1;
+	if (!_hostConnected)
+		return;
+
+	fputs(message, &USBSerialStream);
 }
+
 
 /** Callback function which is invoked when a complete message is received */
 void HandleLatestGpsMessage(void)
@@ -161,6 +147,8 @@ int main(void)
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
+	
+
 	GlobalInterruptEnable();
 
 	// to receive data from the CDC:
@@ -172,7 +160,7 @@ int main(void)
 	{
 		if (_secondsTick)
 		{
-			sendGreeting();
+			sendGreeting("Hello\r\n");
 			_secondsTick = 0;
 		}
 
@@ -262,6 +250,7 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 /** Event handler for the library USB Control Request reception event. */
 void EVENT_USB_Device_ControlRequest(void)
 {
+
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 

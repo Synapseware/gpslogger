@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include "Descriptors.h"
+#include "NMEAParser.h"
 
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>

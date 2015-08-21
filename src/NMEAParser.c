@@ -1,23 +1,17 @@
-#incldue "NMEAParser.h"
+#include "NMEAParser.h"
 
 
 
 
-char* ParsedNMEA_GPGGA(void)
+char* ParsedNMEA_GPGGA(const char* sentence)
 {
-	return NULL;
+	return 0;
 }
 
 
-char* ParsedNMEA_GPRMC(void)
+char* ParsedNMEA_GPRMC(const char* sentence)
 {
-	return NULL;
-}
-
-
-char* ParsedNMEA_PMTK(void)
-{
-	return NULL;
+	return 0;
 }
 
 
@@ -29,12 +23,12 @@ char* ParseNMEA_Sentence(const char* sentence)
 		return NULL;
 	}
 
-	if (strcmp(sentence, "$GPGGA", 6))
+	if (strncmp(sentence, "$GPGGA", 6))
 	{
 		return ParsedNMEA_GPGGA(sentence);
 	}
 
-	if (strcmp(sentence, "$GPRMC", 6))
+	if (strncmp(sentence, "$GPRMC", 6))
 	{
 		return ParsedNMEA_GPRMC(sentence);
 	}
