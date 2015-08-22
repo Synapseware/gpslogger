@@ -263,18 +263,6 @@ void HandleLatestGpsMessage(void)
 	}
 }
 
-void CDC_ProcessControlStateChange(void)
-{
-	/* Device must be connected and configured for the task to run */
-	if (USB_DeviceState != DEVICE_STATE_Configured)
-	  return;
-
-	if (_hostConnected)
-	{
-		VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
-		CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
-	}
-}
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
@@ -295,7 +283,12 @@ int main(void)
 
 	for (;;)
 	{
-		if (_secondsTick)
+		if (!_hostConnected)
+		{
+			delay = 3;
+		}
+
+		if (_secondsTick && _hostConnected)
 		{
 			if (delay)
 			{
@@ -319,7 +312,7 @@ int main(void)
 		if (Adafruit_GPS_MessageAvailable())
 		{
 			DIAG_LED_port->OUTSET = DIAG_LED_pin;
-			//HandleLatestGpsMessage();
+			HandleLatestGpsMessage();
 		}
 		else
 		{
@@ -434,6 +427,20 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const C
 	else
 	{
 		_hostConnected = 0;
+	}
+}
+
+/** Process control line signals */
+void CDC_ProcessControlStateChange(void)
+{
+	/* Device must be connected and configured for the task to run */
+	if (USB_DeviceState != DEVICE_STATE_Configured)
+	  return;
+
+	if (_hostConnected)
+	{
+		VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
+		CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
 	}
 }
 
