@@ -9,14 +9,14 @@
 #include <LUFA/Drivers/Peripheral/SPI.h>
 
 
-#define	FLASH_TOTAL_SIZE		(4U * 1024U * 1024U)
-#define	FLASH_PAGE_SIZE			256
+#define	FLASH_TOTAL_SIZE		4194304UL
+#define	FLASH_PAGE_SIZE			256UL
 #define	FLASH_PAGE_COUNT		(FLASH_TOTAL_SIZE / FLASH_PAGE_SIZE)
 
 
 
 /** Initializes the flash driver & IO hardware */
-void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
+void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
 
 /** Writes a block of bytes to the flash device */
 int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff);

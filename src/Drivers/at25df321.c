@@ -21,7 +21,7 @@ uint8_t		_chip_cs;
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Initializes the AT24DF321 flash driver
-void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
+void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 {
 	_spi_dev	= spi;
 	_spi_port	= spi_port;
@@ -29,7 +29,8 @@ void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 
 	// enable output on the CS pin
 	_spi_port->OUTSET = cs;
-	_spi_port->DIRSET = cs;
+	_spi_port->DIRCLR = PIN6_bm;
+	_spi_port->DIRSET = PIN7_bm | PIN5_bm | PIN4_bm;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -37,8 +38,8 @@ void Initialize_FlashDriver(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 uint8_t read_status_register(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x05);
-	uint8_t status = SPI_TransferByte(_spi_dev, 0);	// write a dummy byte so we can clock in the data from the device
+	SPI_SendByte(_spi_dev, 0x05);
+	uint8_t status = SPI_ReceiveByte(_spi_dev);
 	_spi_port->OUTSET = chip_cs;
 
 	return status;
@@ -49,7 +50,7 @@ uint8_t read_status_register(uint8_t chip_cs)
 uint8_t device_is_ready(uint8_t chip_cs)
 {
 	// if bit 0 is cleared then the device is ready
-	if ((read_status_register(chip_cs) & 0x01) == 0)
+	if ((read_status_register(chip_cs) & (1<<0)) == 0)
 		return 1;
 
 	// device is not ready
@@ -74,7 +75,7 @@ void write_enable(uint8_t chip_cs)
 {
 	// write 06h to the chip to enable the write mode
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x06);
+	SPI_SendByte(_spi_dev, 0x06);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -84,7 +85,7 @@ void write_disable(uint8_t chip_cs)
 {
 	// write 04h to the chip to disable the write mode
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x04);
+	SPI_SendByte(_spi_dev, 0x04);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -98,11 +99,11 @@ int8_t is_valid(uint8_t chip_cs)
 		mfgid	= 0,
 		devid1	= 0;
 
-	SPI_TransferByte(_spi_dev, 0x9f);
-	mfgid	= SPI_TransferByte(_spi_dev, 0);
-	devid1	= SPI_TransferByte(_spi_dev, 0);
-	SPI_TransferByte(_spi_dev, 0);
-	SPI_TransferByte(_spi_dev, 0);
+	SPI_SendByte(_spi_dev, 0x9f);
+	mfgid	= SPI_ReceiveByte(_spi_dev);
+	devid1	= SPI_ReceiveByte(_spi_dev);
+	SPI_SendByte(_spi_dev, 0);
+	SPI_SendByte(_spi_dev, 0);
 
 	_spi_port->OUTSET = chip_cs;
 
@@ -114,8 +115,8 @@ int8_t is_valid(uint8_t chip_cs)
 void global_unprotect(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x01);				// allow setting of the SPRL bit and the global protect/unprotect flags
-	SPI_TransferByte(
+	SPI_SendByte(_spi_dev, 0x01);				// allow setting of the SPRL bit and the global protect/unprotect flags
+	SPI_SendByte(
 		_spi_dev,
 		(0<<7) |					// SPRL bit.  0 = unlocked (default), 1 = locked
 		(0<<5) |					// bits 5:2 must be cleared
@@ -131,10 +132,10 @@ void global_unprotect(uint8_t chip_cs)
 void unprotect_sector(uint8_t chip_cs, uint8_t sector)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x39);
-	SPI_TransferByte(_spi_dev, sector & 0x3F);
-	SPI_TransferByte(_spi_dev, 0);
-	SPI_TransferByte(_spi_dev, 0);
+	SPI_SendByte(_spi_dev, 0x39);
+	SPI_SendByte(_spi_dev, sector & 0x3F);
+	SPI_SendByte(_spi_dev, 0);
+	SPI_SendByte(_spi_dev, 0);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -143,10 +144,10 @@ void unprotect_sector(uint8_t chip_cs, uint8_t sector)
 void protect_sector(uint8_t chip_cs, uint8_t sector)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x36);
-	SPI_TransferByte(_spi_dev, sector & 0x3F);
-	SPI_TransferByte(_spi_dev, 0);
-	SPI_TransferByte(_spi_dev, 0);
+	SPI_SendByte(_spi_dev, 0x36);
+	SPI_SendByte(_spi_dev, sector & 0x3F);
+	SPI_SendByte(_spi_dev, 0);
+	SPI_SendByte(_spi_dev, 0);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -156,10 +157,10 @@ void erase_block(uint8_t chip_cs, uint8_t mode, uint32_t address)
 {
 	_spi_port->OUTCLR = chip_cs;
 
-	SPI_TransferByte(_spi_dev, mode);
-	SPI_TransferByte(_spi_dev, (address >> 16) & 0x3F);
-	SPI_TransferByte(_spi_dev, address >> 8);
-	SPI_TransferByte(_spi_dev, address & 0xFF);
+	SPI_SendByte(_spi_dev, mode);
+	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
+	SPI_SendByte(_spi_dev, address >> 8);
+	SPI_SendByte(_spi_dev, address & 0xFF);
 
 	_spi_port->OUTSET = chip_cs;
 }
@@ -197,7 +198,7 @@ int erase_block_64k(uint8_t chip_cs, uint32_t address)
 int erase_chip(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x60);
+	SPI_SendByte(_spi_dev, 0x60);
 	_spi_port->OUTSET = chip_cs;
 
 	return write_succeeded(chip_cs);
@@ -208,15 +209,15 @@ int erase_chip(uint8_t chip_cs)
 int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_TransferByte(_spi_dev, 0x02);
-	SPI_TransferByte(_spi_dev, (address >> 16) & 0x3F);
-	SPI_TransferByte(_spi_dev, address >> 8);
-	SPI_TransferByte(_spi_dev, address & 0xff);
+	SPI_SendByte(_spi_dev, 0x02);
+	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
+	SPI_SendByte(_spi_dev, address >> 8);
+	SPI_SendByte(_spi_dev, address & 0xff);
 
 	int index = 0;
 	while(index < count)
 	{
-		SPI_TransferByte(_spi_dev, pbuff[index++]);
+		SPI_SendByte(_spi_dev, pbuff[index++]);
 	}
 
 	_spi_port->OUTSET = chip_cs;
@@ -230,17 +231,17 @@ int read_block(uint8_t chip_cs, uint32_t address, int count, char * pbuff)
 {
 	_spi_port->OUTCLR = chip_cs;
 
-	SPI_TransferByte(_spi_dev, 0x03);	// high-speed SPI clock because it's good for all clock values
-	SPI_TransferByte(_spi_dev, (address >> 16) & 0x3F);
-	SPI_TransferByte(_spi_dev, address >> 8);
-	SPI_TransferByte(_spi_dev, address & 0xFF);
-	//SPI_TransferByte(_spi_dev, 0);	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
+	SPI_SendByte(_spi_dev, 0x03);	// high-speed SPI clock because it's good for all clock values
+	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
+	SPI_SendByte(_spi_dev, address >> 8);
+	SPI_SendByte(_spi_dev, address & 0xFF);
+	//SPI_SendByte(_spi_dev, 0);	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
 
 	int index = 0;
 	while (index < count)
 	{
 		// clock in the data from the chip
-		pbuff[index++] = SPI_TransferByte(_spi_dev, 0);
+		pbuff[index++] = SPI_ReceiveByte(_spi_dev);
 	}
 	_spi_port->OUTSET = chip_cs;
 

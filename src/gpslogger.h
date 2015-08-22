@@ -38,9 +38,11 @@
 #define GPS_EN_port		(&PORTC)
 #define GPS_EN_pin		PIN1_bm
 
+#define DIAG_LED_port	(&PORTC)
+#define DIAG_LED_pin	PIN0_bm
 
-#define SPI_DEVICE		SPID
-#define SPI_PORT		(&PORTD)
+#define SPI_DEVICE		SPIC
+#define SPI_PORT		(&PORTC)
 #define SPI_CS			PIN4_bm
 
 

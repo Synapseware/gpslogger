@@ -84,20 +84,49 @@ void sendGreeting(const char* message)
 /** Finds the first free page in the dataflash chip */
 int32_t FindFirstFreeAddress(void)
 {
+	char msg[128];
+
+	uint8_t status = device_is_ready(SPI_CS);
+	sprintf_P(msg, PSTR("device is ready: %i\r\n"), status);
+	fputs(msg, &USBSerialStream);
+
+	sprintf_P(msg, PSTR("Looking for a free page in flash\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	sprintf_P(msg, PSTR("Page count: %lu\r\n"), FLASH_PAGE_COUNT);
+	fputs(msg, &USBSerialStream);
+	sprintf_P(msg, PSTR("Page size: %lu\r\n"), FLASH_PAGE_SIZE);
+	fputs(msg, &USBSerialStream);
+	sprintf_P(msg, PSTR("Total size: %lu\r\n"), FLASH_TOTAL_SIZE);
+	fputs(msg, &USBSerialStream);
+
+	sprintf_P(msg, PSTR("Checking page:\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	char page[256];
 	uint32_t address = 0;
-	for (int i = 0; i < FLASH_PAGE_COUNT; i += FLASH_PAGE_SIZE)
+	for (int i = 0; i < FLASH_PAGE_COUNT; i++)
 	{
 		// compute next read address
 		address = i * FLASH_PAGE_SIZE;
 
+		sprintf_P(msg, PSTR("% -8lu"), address);
+		fputs(msg, &USBSerialStream);
+
+		if (((i+1) % 14) == 0)
+		{
+			sprintf_P(msg, PSTR("\r\n"));
+			fputs(msg, &USBSerialStream);
+		}
+
 		// read the specific block of data from the dataflash
-		read_block(SPI_CS, address, sizeof(_nmea), _nmea);
+		read_block(SPI_CS, address, sizeof(page), page);
 
 		// check if the whole block is initialized (all bytes = 0xFF)
 		bool blockIsValid = true;
-		for (int j = 0; j < sizeof(_nmea); j++)
+		for (int j = 0; j < sizeof(page); j++)
 		{
-			if (0xFF != _nmea[j])
+			if (0xFF != page[j])
 			{
 				blockIsValid = false;
 				break;
@@ -106,10 +135,16 @@ int32_t FindFirstFreeAddress(void)
 
 		if (blockIsValid)
 		{
+			sprintf_P(msg, PSTR("\r\nFound an open page at address %i\r\n"), address);
+			fputs(msg, &USBSerialStream);
+
 			// found an empty block, let's start here
 			return address;
 		}
 	}
+
+	sprintf_P(msg, PSTR("\r\nNo free pages found!\r\n"));
+	fputs(msg, &USBSerialStream);
 
 	// no wholly initialized blocks available!
 	return -1;
@@ -157,11 +192,15 @@ void HandleLatestGpsMessage(void)
 
 		// TODO:
 		// Once we write data to the flash chip, the GPS should be disabled
-		Adafruit_GPS_Suspend();
+		//Adafruit_GPS_Suspend();
+
+		fputs(_nmea, &USBSerialStream);
+		sprintf_P(_nmea, PSTR("\r\n"));
+		fputs(_nmea, &USBSerialStream);
 
 		// write latest message to flash
-		write_block(SPI_CS, _flashWriteAddr, sizeof(_nmea), _nmea);
-		_flashWriteAddr += sizeof(_nmea);
+		//write_block(SPI_CS, _flashWriteAddr, sizeof(_nmea), _nmea);
+		//_flashWriteAddr += sizeof(_nmea);
 	}
 	else if (0 == strncmp(_nmea, "$GPRMC", 6))
 	{
@@ -184,11 +223,18 @@ void HandleLatestGpsMessage(void)
 			_hasFix = false;
 		else
 			return;	// invalid state
+
+		sprintf_P(_nmea, PSTR("Fix state: %i\r\n"), _hasFix);
+		fputs(_nmea, &USBSerialStream);
 	}
 	else if (0 == strncmp(_nmea, "$PMTK", 5))
 	{
 		// GPS module status info
 		// process any status messages from the GPS
+
+		fputs(_nmea, &USBSerialStream);
+		sprintf_P(_nmea, PSTR("\r\n"));
+		fputs(_nmea, &USBSerialStream);
 	}
 }
 
@@ -198,13 +244,12 @@ void HandleLatestGpsMessage(void)
  */
 int main(void)
 {
+	int delay = 25;
+
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
-	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
-
-	/* Locate the first initialzed page address in the flash storage device */
-	_flashWriteAddr = FindFirstFreeAddress();
+	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
 	GlobalInterruptEnable();
 
@@ -213,6 +258,27 @@ int main(void)
 
 	for (;;)
 	{
+		if (_secondsTick)
+		{
+			if (delay)
+			{
+				delay--;
+
+				if (!delay)
+				{
+					DIAG_LED_port->OUTCLR = DIAG_LED_pin;
+
+					sprintf_P(_nmea, PSTR("Delay complete.\r\n"));
+					fputs(_nmea, &USBSerialStream);
+
+					/* Locate the first initialzed page address in the flash storage device */
+					_flashWriteAddr = FindFirstFreeAddress();
+				}
+			}
+
+			_secondsTick = 0;
+		}
+
 		if (Adafruit_GPS_MessageAvailable())
 		{
 			HandleLatestGpsMessage();
@@ -238,6 +304,7 @@ void SetupHardware(void)
 	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
 	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
 
+	/* Enable lov, med and high level interrupts in the PMIC */
 	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
 
 	/* Hardware Initialization */
@@ -247,25 +314,29 @@ void SetupHardware(void)
 	LED_PORT->OUTCLR = LED_PIN;
 	LED_PORT->DIRSET = LED_PIN;
 
+	// initialize debug LED
+	DIAG_LED_port->DIRSET = DIAG_LED_pin;
+	DIAG_LED_port->OUTSET = DIAG_LED_pin;
+
 	// intialize the GPS module
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
-	
 	Adafruit_GPS_DisableGPS();
 
+	// Initialize the FLASH driver
+	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
 
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
-		SPI_SPEED_FCPU_DIV_2 |
+		SPI_MODE_MASTER |
+		SPI_SPEED_FCPU_DIV_128 |
 		SPI_ORDER_MSB_FIRST |
-		SPI_SCK_LEAD_FALLING |
-		SPI_SAMPLE_TRAILING |
-		SPI_MODE_MASTER
+		SPI_SCK_LEAD_RISING |
+		SPI_SAMPLE_LEADING
 	);
 
-	Initialize_FlashDriver(&SPI_DEVICE, SPI_PORT, SPI_CS);
-
+	// Initialize the timer(s)
 	Timer_Initialize();
 }
 

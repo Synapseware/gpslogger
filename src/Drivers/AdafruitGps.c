@@ -43,6 +43,7 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 void Adafruit_GPS_EnableGPS(void)
 {
 	// set the GPS enable pin to input (high-z)
+	_en_port->OUTSET = _en_pin;
 	_en_port->DIRCLR = _en_pin;
 }
 
