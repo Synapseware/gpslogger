@@ -161,54 +161,23 @@ void HandleLatestGpsMessage(void)
 	memset(_nmea, 0, sizeof(_nmea));
 
 	// copy the latest message
-	int data	= 0;
 	int idx		= 0;
+	char msg[256];
 
-	// spool all the data from the GPS buffer
-	while (0 != (data = Adafruit_GPS_Read()) && idx < sizeof(_nmea))
-	{
-		_nmea[idx++] = data;
-	}
-
-	// check min-length
+	// Clone the most recent GPS message
+	idx = Adafruit_GPS_CloneLastMessage(_nmea, sizeof(_nmea));
 	if (idx < 5)
 	{
 		// nothing to do
 		return;
 	}
 
-	char msg[128];
-	sprintf_P(msg, PSTR("************************************************************\r\n"));
-	fputs(msg, &USBSerialStream);
-
-	fputs(_nmea, &USBSerialStream);
-	sprintf_P(msg, PSTR("\r\n"));
-	fputs(msg, &USBSerialStream);
-
-	idx = strncmp(_nmea, "$GPGGA", 6);
-	sprintf_P(msg, PSTR("$GPGGA index: %i\r\n"), idx);
-	fputs(msg, &USBSerialStream);
-
-	idx = strncmp(_nmea, "$GPRMC", 6);
-	sprintf_P(msg, PSTR("$GPRMC index: %i\r\n"), idx);
-	fputs(msg, &USBSerialStream);
-
-	idx = strncmp(_nmea, "$PMTK", 6);
-	sprintf_P(msg, PSTR("$PMTK index: %i\r\n"), idx);
-	fputs(msg, &USBSerialStream);
-
-	idx = strncmp(_nmea, "$GPVTG", 6);
-	sprintf_P(msg, PSTR("$GPVTG index: %i\r\n"), idx);
-	fputs(msg, &USBSerialStream);
-
-	sprintf_P(msg, PSTR("\r\n\r\n"));
-	fputs(msg, &USBSerialStream);
-
-	return;
-
 	// parse specific messages
 	if (0 == strncmp(_nmea, "$GPGGA", 6))
 	{
+		//sprintf_P(msg, PSTR("Found GPGGA message!\r\n"));
+		//fputs(msg, &USBSerialStream);
+
 		// location data - save to flash!
 		if (!_hasFix)
 		{
@@ -216,7 +185,8 @@ void HandleLatestGpsMessage(void)
 			return;
 		}
 
-		// If the flash write address less than 0, then no free pages remain - don't write the data
+		// If the flash write address is less than 0, then no free pages remain
+		// don't write the data!
 		if (_flashWriteAddr < 0)
 		{
 			return;
@@ -226,9 +196,9 @@ void HandleLatestGpsMessage(void)
 		// Once we write data to the flash chip, the GPS should be disabled
 		//Adafruit_GPS_Suspend();
 
-		fputs(_nmea, &USBSerialStream);
-		sprintf_P(_nmea, PSTR("\r\n"));
-		fputs(_nmea, &USBSerialStream);
+		//fputs(_nmea, &USBSerialStream);
+		//sprintf_P(msg, PSTR("\r\n"));
+		//fputs(msg, &USBSerialStream);
 
 		// write latest message to flash
 		//write_block(SPI_CS, _flashWriteAddr, sizeof(_nmea), _nmea);
@@ -236,10 +206,18 @@ void HandleLatestGpsMessage(void)
 	}
 	else if (0 == strncmp(_nmea, "$GPRMC", 6))
 	{
+		sprintf_P(msg, PSTR("********************************\r\nFound GPRMC message!\r\n"));
+		fputs(msg, &USBSerialStream);
+		fputs(_nmea, &USBSerialStream);
+		sprintf_P(msg, PSTR("\r\n"));
+		fputs(msg, &USBSerialStream);
+
 		// process fix data - look for 'V' or 'A'
 		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 		// no fix:		$GPRMC,072450.000,V,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
+
 		char* p = strchr(_nmea, ',') + 1;
+
 		/*
 		float timef = atof(p);
 		uint32_t time = timef;
@@ -248,25 +226,38 @@ void HandleLatestGpsMessage(void)
 		int seconds = (time % 100);
 		int milliseconds = fmod(timef, 1.0) * 1000;
 		*/
-		p = strstr(p, ',') + 1;
-		if ('A' == p[0])
-			_hasFix = true;
-		else if ('V' == p[0])
-			_hasFix = false;
-		else
-			return;	// invalid state
 
-		sprintf_P(_nmea, PSTR("Fix state: %i\r\n"), _hasFix);
-		fputs(_nmea, &USBSerialStream);
+		p = strchr(p, ',') + 1;
+
+		// check for an A (active) character which indicate a valid GPS satellite fix
+		_hasFix = ('A' == p[0]);
+		if (_hasFix)
+			sprintf_P(msg, PSTR("GPS fix active!\r\n\r\n"));
+		else
+			sprintf_P(msg, PSTR("data is void\r\n\r\n"));
+		fputs(msg, &USBSerialStream);
 	}
 	else if (0 == strncmp(_nmea, "$PMTK", 5))
 	{
+		sprintf_P(msg, PSTR("Found PMTK message!\r\n"));
+		fputs(msg, &USBSerialStream);
+
 		// GPS module status info
 		// process any status messages from the GPS
 
 		fputs(_nmea, &USBSerialStream);
-		sprintf_P(_nmea, PSTR("\r\n"));
+		sprintf_P(msg, PSTR("\r\n"));
+		fputs(msg, &USBSerialStream);
+	}
+	else
+	{
+		/*
+		sprintf_P(msg, PSTR("Unrecognized NMEA sentence: "));
+		fputs(msg, &USBSerialStream);
 		fputs(_nmea, &USBSerialStream);
+		sprintf_P(msg, PSTR("\r\n\r\n"));
+		fputs(msg, &USBSerialStream);
+		*/
 	}
 }
 
@@ -356,10 +347,15 @@ void SetupHardware(void)
 	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 
 	// intialize the GPS module
-	Adafruit_GPS_EnableGPS();
+	GPS_UART_port->DIRSET = GPS_TX_pin;
+	GPS_UART_port->DIRCLR = GPS_RX_pin;
+
+	Adafruit_GPS_Enable();
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
+	//Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCONLY));
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
+	Adafruit_GPS_Suspend();
 
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);

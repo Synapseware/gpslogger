@@ -9,9 +9,8 @@ uint8_t			_en_pin			= 0;
 int8_t			_message_rdy	= 0;
 
 /** Create the buffer structure and its underlying storage array */
-RingBuffer_t	Buffer;
-uint8_t			BufferData[256];
-int				BufferIndex		= 0;
+uint8_t			_data[256];
+int				_buffidx		= 0;
 
 
 /** Message ready callback function */
@@ -27,7 +26,9 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 	_en_pin		= en_pin;
 
 	// Initialize the USART ring buffer with the created storage array
-	RingBuffer_InitBuffer(&Buffer, BufferData, sizeof(BufferData));
+	//RingBuffer_InitBuffer(&Buffer, _data, sizeof(_data));
+	memset(_data, 0, sizeof(_data) * sizeof(char));
+	_buffidx = 0;
 
 	// Initialize the GPS USART interface
 	Serial_Init(_usart, 9600, false);
@@ -40,16 +41,15 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 
 
 /** Enable the GPS */
-void Adafruit_GPS_EnableGPS(void)
+void Adafruit_GPS_Enable(void)
 {
 	// set the GPS enable pin to input (high-z)
-	_en_port->OUTSET = _en_pin;
 	_en_port->DIRCLR = _en_pin;
 }
 
 
 /** Disable the GPS */
-void Adafruit_GPS_DisableGPS(void)
+void Adafruit_GPS_Disable(void)
 {
 	// set the GPS enable pin to output (initialized to LOW level)
 	_en_port->OUTCLR = _en_pin;
@@ -62,14 +62,6 @@ void Adafruit_GPS_SendCommand(const char* command)
 {
 	Serial_SendString_P(_usart, command);
 	Serial_SendByte(_usart, '\n');
-}
-
-
-/** Reads a string of data from the GPS device */
-uint16_t Adafruit_GPS_BufferSize(void)
-{
-	// return the ring buffer count
-	return RingBuffer_GetCount(&Buffer);
 }
 
 
@@ -89,24 +81,12 @@ int8_t Adafruit_GPS_MessageAvailable(void)
 }
 
 
-/** Returns data from the receive buffer */
-int Adafruit_GPS_Read(void)
+/** Clone's the latest message received by copying it to the given buffer */
+int Adafruit_GPS_CloneLastMessage(char* destination, int destSize)
 {
-	if (RingBuffer_IsEmpty(&Buffer))
-	{
-		return -1;
-	}
-
-	// read a byte from the buffer
-	uint8_t data = RingBuffer_Remove(&Buffer);
-
-	// signal buffer empty/done
-	if (RingBuffer_IsEmpty(&Buffer))
-	{
-		_message_rdy = 0;
-	}
-
-	return data;
+	strncpy(destination, _data, destSize);
+	_message_rdy = 0;
+	return _buffidx;
 }
 
 
@@ -114,7 +94,7 @@ int Adafruit_GPS_Read(void)
 void Adafruit_GPS_Suspend(void)
 {
 	// issue the PMTK suspend command message
-	Adafruit_GPS_SendCommand(PMTK_STANDBY);
+	Adafruit_GPS_SendCommand(PSTR(PMTK_STANDBY));
 }
 
 
@@ -122,26 +102,46 @@ void Adafruit_GPS_Suspend(void)
 void Adafruit_GPS_Wakeup(void)
 {
 	// issue the PMTK awake command
-	Adafruit_GPS_SendCommand(PMTK_AWAKE);
+	Adafruit_GPS_SendCommand(PSTR(PMTK_AWAKE));
 }
 
 
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
-	uint8_t data = _usart->DATA;
+	// capture the received data
+	char data = _usart->DATA;
 
+	// don't process any data if the message ready flag is set
+	if (_message_rdy)
+	{
+		return;
+	}
+
+	// check for end-of-message character from the GPS
 	if ('\n' == data)
 	{
 		_message_rdy = 1;
-		RingBuffer_Insert(&Buffer, 0);
+		_data[_buffidx] = 0;
 
 		if (NULL != _onMessageReady)
 			_onMessageReady();
+
+		return;
 	}
-	else
+
+	// check for start-of-message character from the GPS
+	if ('$' == data)
 	{
-		RingBuffer_Insert(&Buffer, data);
+		// reset the buffer
+		memset(_data, 0, sizeof(_data));
+		_buffidx = 0;
+	}
+
+	// don't go past the end of the GPS data buffer
+	if (_buffidx < sizeof(_data) - 1)
+	{
+		// add the data to the buffer
+		_data[_buffidx++] = data;
 	}
 }
-
