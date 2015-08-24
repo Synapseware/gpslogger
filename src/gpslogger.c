@@ -50,21 +50,24 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 static FILE USBSerialStream;
 
 
-/** Configure timer for 1 second delay with interrupts */
+/** Configure timers */
 void Timer_Initialize(void)
 {
-	/* Select clock source. */
-	TC0_ConfigClockSource( &TCC0, TC_CLKSEL_DIV1024_gc );
+	// Configure TC0 for 1 second interrupt
+	{
+		/* Select clock source. */
+		TC0_ConfigClockSource( &TCC0, TC_CLKSEL_DIV1024_gc );
 
-	/* Set period/TOP value. */
-	TC_SetPeriod( &TCC0, F_CPU / 1024 );
+		/* Set period/TOP value. */
+		TC_SetPeriod( &TCC0, F_CPU / 1024 );
 
-	/* Setup interrupts for Compare/Capture A */
-	TC0_SetCCAIntLevel( &TCC0, TC_CCAINTLVL_LO_gc );
+		/* Setup interrupts for Compare/Capture A */
+		TC0_SetCCAIntLevel( &TCC0, TC_CCAINTLVL_LO_gc );
 
-	/* Setup interrupts for Compare/Capture A */
-	TCC0.CCB = F_CPU / 1024 * 0.05;
-	TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
+		/* Setup interrupts for Compare/Capture B */
+		TCC0.CCB = F_CPU / 1024 * 0.05;
+		TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
+	}
 }
 
 
@@ -174,6 +177,35 @@ void HandleLatestGpsMessage(void)
 		return;
 	}
 
+	char msg[128];
+	sprintf_P(msg, PSTR("************************************************************\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	fputs(_nmea, &USBSerialStream);
+	sprintf_P(msg, PSTR("\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	idx = strncmp(_nmea, "$GPGGA", 6);
+	sprintf_P(msg, PSTR("$GPGGA index: %i\r\n"), idx);
+	fputs(msg, &USBSerialStream);
+
+	idx = strncmp(_nmea, "$GPRMC", 6);
+	sprintf_P(msg, PSTR("$GPRMC index: %i\r\n"), idx);
+	fputs(msg, &USBSerialStream);
+
+	idx = strncmp(_nmea, "$PMTK", 6);
+	sprintf_P(msg, PSTR("$PMTK index: %i\r\n"), idx);
+	fputs(msg, &USBSerialStream);
+
+	idx = strncmp(_nmea, "$GPVTG", 6);
+	sprintf_P(msg, PSTR("$GPVTG index: %i\r\n"), idx);
+	fputs(msg, &USBSerialStream);
+
+	sprintf_P(msg, PSTR("\r\n\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	return;
+
 	// parse specific messages
 	if (0 == strncmp(_nmea, "$GPGGA", 6))
 	{
@@ -249,7 +281,7 @@ int main(void)
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
-	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
+	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
 	GlobalInterruptEnable();
 
@@ -281,7 +313,12 @@ int main(void)
 
 		if (Adafruit_GPS_MessageAvailable())
 		{
+			DIAG_LED_port->OUTSET = DIAG_LED_pin;
 			HandleLatestGpsMessage();
+		}
+		else
+		{
+			DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 		}
 
 		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
@@ -319,10 +356,10 @@ void SetupHardware(void)
 	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 
 	// intialize the GPS module
+	Adafruit_GPS_EnableGPS();
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
-	Adafruit_GPS_DisableGPS();
 
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
