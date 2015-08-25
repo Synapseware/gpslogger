@@ -18,6 +18,10 @@
 /** Initializes the flash driver & IO hardware */
 void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
 
+void write_enable(uint8_t chip_cs);
+void write_disable(uint8_t chip_cs);
+void global_unprotect(uint8_t chip_cs);
+
 /** Writes a block of bytes to the flash device */
 int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff);
 

@@ -175,9 +175,6 @@ void HandleLatestGpsMessage(void)
 	// parse specific messages
 	if (0 == strncmp(_nmea, "$GPGGA", 6))
 	{
-		//sprintf_P(msg, PSTR("Found GPGGA message!\r\n"));
-		//fputs(msg, &USBSerialStream);
-
 		// location data - save to flash!
 		if (!_hasFix)
 		{
@@ -192,26 +189,32 @@ void HandleLatestGpsMessage(void)
 			return;
 		}
 
+		sprintf_P(msg, PSTR("Found GPGGA message!\r\nSuspending GPS module.\r\n"));
+		fputs(msg, &USBSerialStream);
+
 		// TODO:
 		// Once we write data to the flash chip, the GPS should be disabled
-		//Adafruit_GPS_Suspend();
+		Adafruit_GPS_Suspend();
+
+		sprintf_P(msg, PSTR("GPS module suspended.  Saving sentence to FLASH.\r\n"));
+		fputs(msg, &USBSerialStream);
 
 		//fputs(_nmea, &USBSerialStream);
 		//sprintf_P(msg, PSTR("\r\n"));
 		//fputs(msg, &USBSerialStream);
 
 		// write latest message to flash
-		//write_block(SPI_CS, _flashWriteAddr, sizeof(_nmea), _nmea);
-		//_flashWriteAddr += sizeof(_nmea);
+		//write_enable(SPI_CS);
+		//write_block(SPI_CS, _flashWriteAddr, 128, _nmea);
+		//write_disable(SPI_CS);
+
+		_flashWriteAddr += 128;
+
+		sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
+		fputs(msg, &USBSerialStream);
 	}
 	else if (0 == strncmp(_nmea, "$GPRMC", 6))
 	{
-		sprintf_P(msg, PSTR("********************************\r\nFound GPRMC message!\r\n"));
-		fputs(msg, &USBSerialStream);
-		fputs(_nmea, &USBSerialStream);
-		sprintf_P(msg, PSTR("\r\n"));
-		fputs(msg, &USBSerialStream);
-
 		// process fix data - look for 'V' or 'A'
 		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 		// no fix:		$GPRMC,072450.000,V,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
@@ -278,6 +281,12 @@ int main(void)
 
 	// to receive data from the CDC:
 	// CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+	// toggle DTD & DSR line to READY
+	//VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
+	//CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
+
+	/* Locate the first initialzed page address in the flash storage device */
+	_flashWriteAddr = FindFirstFreeAddress();
 
 	for (;;)
 	{
@@ -294,8 +303,8 @@ int main(void)
 					sprintf_P(_nmea, PSTR("Delay complete.\r\n"));
 					fputs(_nmea, &USBSerialStream);
 
-					/* Locate the first initialzed page address in the flash storage device */
-					_flashWriteAddr = FindFirstFreeAddress();
+					sprintf_P(_nmea, PSTR("Starting address: %lu\r\n"), _flashWriteAddr);
+					fputs(_nmea, &USBSerialStream);
 				}
 			}
 
@@ -305,7 +314,7 @@ int main(void)
 		if (Adafruit_GPS_MessageAvailable())
 		{
 			DIAG_LED_port->OUTSET = DIAG_LED_pin;
-			HandleLatestGpsMessage();
+			//HandleLatestGpsMessage();
 		}
 		else
 		{
@@ -315,7 +324,7 @@ int main(void)
 		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
 		CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
-		/* Required calls */		
+		/* Required calls */
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 	}
@@ -357,17 +366,19 @@ void SetupHardware(void)
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
 	Adafruit_GPS_Suspend();
 
-	// Initialize the FLASH driver
-	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
-
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_128 |
+		SPI_SPEED_FCPU_DIV_64 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING
 	);
+
+	// Initialize the FLASH driver
+	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
+	//global_unprotect(SPI_CS);
+	//write_enable(SPI_CS);
 
 	// Initialize the timer(s)
 	Timer_Initialize();
@@ -376,41 +387,43 @@ void SetupHardware(void)
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
-	//LEDs_SetAllLEDs(LEDMASK_USB_ENUMERATING);
-	//(LED_PORT)->OUTSET = LED_PIN;
+	// turn on the diag LED
+	LED_PORT->OUTSET = LED_PIN;
 }
 
 /** Event handler for the library USB Disconnection event. */
 void EVENT_USB_Device_Disconnect(void)
 {
-	//LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
-	(LED_PORT)->OUTCLR = LED_PIN;
+	// turn off the diag LED
+	LED_PORT->OUTCLR = LED_PIN;
+
+	VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost &= ~(CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
+	CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
 }
 
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
-	bool ConfigSuccess = true;
-
-	ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-
-	LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
-
-	if (ConfigSuccess)
-		(LED_PORT)->OUTSET = LED_PIN;
+	bool success = CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
+	if (success)
+	{
+		VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
+		CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
+	}
 }
 
 /** Event handler for the library USB Control Request reception event. */
 void EVENT_USB_Device_ControlRequest(void)
 {
-
+	// pass the config data to the processor
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
 /** Event handler for the library USB Control Line State Change event */
 void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const CDCInterfaceInfo)
 {
-	if (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR)
+	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
+	if (CurrentDTRState)
 	{
 		_hostConnected = 1;
 	}
@@ -427,12 +440,12 @@ ISR(TCC0_CCA_vect)
 
 	// Turn the LED on
 	if (_hostConnected)
-		(LED_PORT)->OUTSET = LED_PIN;
+		LED_PORT->OUTSET = LED_PIN;
 }
 
 /** Interrupt handler for TCC0 Compare/Capture B */
 ISR(TCC0_CCB_vect)
 {
 	// Turn the LED off
-	(LED_PORT)->OUTCLR = LED_PIN;
+	LED_PORT->OUTCLR = LED_PIN;
 }
