@@ -12,7 +12,6 @@ static char			_nmea[256];
 static bool			_hasFix				= false;
 
 
-
 /** LUFA CDC Class driver interface configuration and state information. This structure is
  *  passed to all CDC Class driver functions, so that multiple instances of the same class
  *  within a device can be differentiated from one another.
@@ -264,13 +263,25 @@ void HandleLatestGpsMessage(void)
 	}
 }
 
+void CDC_ProcessControlStateChange(void)
+{
+	/* Device must be connected and configured for the task to run */
+	if (USB_DeviceState != DEVICE_STATE_Configured)
+	  return;
+
+	if (_hostConnected)
+	{
+		VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
+		CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
+	}
+}
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
 int main(void)
 {
-	int delay = 25;
+	int delay = 3;
 
 	SetupHardware();
 
@@ -278,12 +289,6 @@ int main(void)
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
 	GlobalInterruptEnable();
-
-	// to receive data from the CDC:
-	// CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-	// toggle DTD & DSR line to READY
-	//VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
-	//CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
 
 	/* Locate the first initialzed page address in the flash storage device */
 	_flashWriteAddr = FindFirstFreeAddress();
@@ -323,6 +328,8 @@ int main(void)
 
 		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
 		CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+
+		CDC_ProcessControlStateChange();
 
 		/* Required calls */
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
@@ -397,8 +404,7 @@ void EVENT_USB_Device_Disconnect(void)
 	// turn off the diag LED
 	LED_PORT->OUTCLR = LED_PIN;
 
-	VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost &= ~(CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
-	CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
+	_hostConnected = 0;
 }
 
 /** Event handler for the library USB Configuration Changed event. */
@@ -407,8 +413,6 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	bool success = CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
 	if (success)
 	{
-		VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
-		CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
 	}
 }
 
