@@ -70,7 +70,7 @@ void Timer_Initialize(void)
 }
 
 
-/** Sends a greeting to the host if the host is connected
+/** Sends a greeting to the host if the host is connected */
 void sendGreeting(const char* message)
 {
 	if (NULL == message)
@@ -81,7 +81,7 @@ void sendGreeting(const char* message)
 
 	fputs(message, &USBSerialStream);
 }
-*/
+
 
 /** Finds the first free page in the dataflash chip */
 int32_t FindFirstFreeAddress(void)
@@ -244,6 +244,12 @@ void HandleLatestGpsMessage(void)
 		sprintf_P(msg, PSTR("Found PMTK message!\r\n"));
 		fputs(msg, &USBSerialStream);
 
+		if (0 == strcmp(_nmea, "$PMTK010,002*2D"))
+		{
+			sprintf_P(msg, PSTR("GPS module is awake\r\n"));
+			fputs(msg, &USBSerialStream);
+		}
+
 		// GPS module status info
 		// process any status messages from the GPS
 
@@ -297,6 +303,9 @@ int main(void)
 				if (!delay)
 				{
 					DIAG_LED_port->OUTCLR = DIAG_LED_pin;
+
+					sprintf_P(_nmea, PSTR("GPS Logger v1.1 - 20150801\r\n"));
+					fputs(_nmea, &USBSerialStream);
 
 					sprintf_P(_nmea, PSTR("Delay complete.\r\n"));
 					fputs(_nmea, &USBSerialStream);
