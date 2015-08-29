@@ -61,7 +61,7 @@ void Adafruit_GPS_Disable(void)
 
 
 /** Sends a command string to the GPS device */
-void Adafruit_GPS_SendCommand(const char* command)
+static void Adafruit_GPS_SendCommand(const char* command)
 {
 	Serial_SendString_P(_usart, command);
 	Serial_SendByte(_usart, '\r');
@@ -77,14 +77,6 @@ void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 }
 
 
-/** Returns 1 if a message is available, otherwise returns 0 */
-int8_t Adafruit_GPS_MessageAvailable(void)
-{
-	// return message avail flag
-	return _message_rdy;
-}
-
-
 /** Clone's the latest message received by copying it to the given buffer */
 int Adafruit_GPS_CloneLastMessage(char* destination, int destSize)
 {
@@ -94,7 +86,7 @@ int Adafruit_GPS_CloneLastMessage(char* destination, int destSize)
 }
 
 
-/** Suspend the the GPS to save power */
+/** Suspend the GPS to save power */
 void Adafruit_GPS_Suspend(void)
 {
 	// issue the PMTK suspend command message
@@ -112,57 +104,64 @@ void Adafruit_GPS_Wakeup(void)
 /**  */
 void Adafruit_GPS_Update1Hz(void)
 {
-
+	// issue the 1Hz update command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
 }
 
 /**  */
 void Adafruit_GPS_Update5Hz(void)
 {
-
+	// issue the 5Hz update command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_5HZ));
 }
 
 /**  */
 void Adafruit_GPS_Update10Hz(void)
 {
-
+	// issue the 10Hz update command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_10HZ));
 }
 
 /**  */
 void Adafruit_GPS_ColdStart(void)
 {
-
+	// issue the cold start command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_COLD_START));
 }
 
 /**  */
 void Adafruit_GPS_RMCOnly(void)
 {
-
+	// 
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCONLY));
 }
 
 /**  */
 void Adafruit_GPS_RMCGGADual(void)
 {
-
+	// 
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
 }
 
 /**  */
 void Adafruit_GPS_AllData(void)
 {
-
+	// 
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_ALLDATA));
 }
 
 /**  */
 void Adafruit_GPS_OutputOff(void)
 {
-
+	// 
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_OFF));
+}
+
+/**  */
+void Adafruit_GPS_AskForVersion(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_Q_RELEASE));
 }
 
 /** Simple status mask helper */
@@ -254,7 +253,7 @@ ISR(USARTE0_RXC_vect)
 		_data[_buffidx] = 0;
 
 		if (NULL != _onMessageReady)
-			_onMessageReady();
+			_onMessageReady(_data, _buffidx);
 
 		return;
 	}

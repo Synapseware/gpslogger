@@ -10,6 +10,8 @@ volatile int32_t	_flashWriteAddr		= 0;
 /** NMEA processing data & flags */
 static char			_nmea[256];
 static bool			_hasFix				= false;
+static bool			_saveNmea			= false;
+static char			_flashBuffer[128];
 
 
 
@@ -166,26 +168,60 @@ int32_t FindFirstFreeAddress(void)
 	return -1;
 }
 
+/** Saves the latest NMEA logging data to the flash */
+bool SaveNMEA(void)
+{
+	_saveNmea = false;
+	char msg[64];
+
+	// make sure our string is NULL terminated
+	size_t sentenceLength = strlen(_flashBuffer);
+	if (_flashWriteAddr < 0 || sentenceLength >= sizeof(_flashBuffer))
+	{
+		sprintf_P(msg, PSTR("Invalid logging message!\r\n"));
+		fputs(msg, &USBSerialStream);
+		return false;
+	}
+
+	// TODO:
+	// Once we write data to the flash chip, the GPS should be disabled
+	Adafruit_GPS_Suspend();
+
+	sprintf_P(msg, PSTR("GPS module suspended.\r\nSaving sentence to FLASH.\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	// write latest message to flash
+	write_enable(SPI_CS);
+	write_block(SPI_CS, _flashWriteAddr, 128, _flashBuffer);
+	write_disable(SPI_CS);
+
+	_flashWriteAddr += 128;
+
+	sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	return true;
+}
 
 /** Callback function which is invoked when a complete message is received */
-void HandleLatestGpsMessage(void)
+void HandleLatestGpsMessage(char* message, int length)
 {
-	// initialize the NMEA buffer before we capture the latest string
-	memset(_nmea, 0, sizeof(_nmea));
-
-	// copy the latest message
-	int idx		= 0;
-	char msg[256];
+	char msg[64];
 	char cmd_buff[16];
 	bool processed = false;
 
-	// Clone the most recent GPS message
-	idx = Adafruit_GPS_CloneLastMessage(_nmea, sizeof(_nmea));
-	if (idx < 5)
+	// make sure we have a valid sentence
+	if (length < 5 || NULL == message)
 	{
 		// nothing to do
 		return;
 	}
+
+	// initialize the NMEA buffer before we capture the latest string
+	memset(_nmea, 0, sizeof(_nmea));
+
+	// Clone the most recent GPS message
+	strncpy(_nmea, message, sizeof(_nmea));
 
 	// signal GPS message receipt
 	DIAG_LED_port->OUTSET = DIAG_LED_pin;
@@ -196,9 +232,11 @@ void HandleLatestGpsMessage(void)
 	{
 		//sprintf_P(msg, PSTR("Found GPGGA message!\r\nSuspending GPS module.\r\n"));
 		//fputs(msg, &USBSerialStream);
+
+		processed = true;
 	}
 
-	// parse GPRMC
+	// parse GPRMC - recommended minimum navigation data
 	strlcpy_PF(cmd_buff, PSTR(NMEA_GPRMC), sizeof(cmd_buff));
 	if (!processed && 0 == strncmp((const char*)_nmea, cmd_buff, 6))
 	{
@@ -228,29 +266,18 @@ void HandleLatestGpsMessage(void)
 		fputs(msg, &USBSerialStream);
 
 		// location data - save to flash!
-		if (!_hasFix && _flashWriteAddr > -1)
+		if (_hasFix)
 		{
-			// TODO:
-			// Once we write data to the flash chip, the GPS should be disabled
-			Adafruit_GPS_Suspend();
+			_saveNmea = true;
 
-			sprintf_P(msg, PSTR("GPS module suspended.  Saving sentence to FLASH.\r\n"));
-			fputs(msg, &USBSerialStream);
+			// reset the flash buffer
+			memset(_flashBuffer, 0, sizeof(_flashBuffer));
 
-			//fputs(_nmea, &USBSerialStream);
-			//sprintf_P(msg, PSTR("\r\n"));
-			//fputs(msg, &USBSerialStream);
-
-			// write latest message to flash
-			//write_enable(SPI_CS);
-			//write_block(SPI_CS, _flashWriteAddr, 128, _nmea);
-			//write_disable(SPI_CS);
-
-			_flashWriteAddr += 128;
-
-			sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
-			fputs(msg, &USBSerialStream);
+			// copy the NMEA sentence to the flash buffer
+			strncpy(_flashBuffer, _nmea, sizeof(_flashBuffer));
 		}
+
+		processed = true;
 	}
 
 	// Parse PMTK
@@ -279,6 +306,9 @@ void HandleLatestGpsMessage(void)
 		fputs(_nmea, &USBSerialStream);
 		sprintf_P(msg, PSTR("\r\n"));
 		fputs(msg, &USBSerialStream);
+
+		// mark block as complete
+		processed = true;
 	}
 
 	DIAG_LED_port->OUTCLR = DIAG_LED_pin;
@@ -291,6 +321,7 @@ void HandleLatestGpsMessage(void)
 int main(void)
 {
 	int delay = 3;
+	_saveNmea = false;
 
 	SetupHardware();
 
@@ -301,6 +332,11 @@ int main(void)
 
 	for (;;)
 	{
+		if (_saveNmea)
+		{
+			_saveNmea = false;
+		}
+
 		if (!_hostConnected)
 		{
 			delay = 3;
@@ -319,15 +355,16 @@ int main(void)
 
 					sprintf_P(_nmea, PSTR("GPS Version: "));
 					fputs(_nmea, &USBSerialStream);
-					Adafruit_GPS_SendCommand(PSTR(PMTK_Q_RELEASE));
+					Adafruit_GPS_AskForVersion();
 
-					_nmea[0] = 0;
-					while(!Adafruit_GPS_MessageAvailable());
-					Adafruit_GPS_CloneLastMessage(_nmea, sizeof(_nmea));
+					//TODO: Get release string from GPS module
+					//_nmea[0] = 0;
+					//while(!Adafruit_GPS_MessageAvailable());
+					//Adafruit_GPS_CloneLastMessage(_nmea, sizeof(_nmea));
 
-					fputs(_nmea, &USBSerialStream);
-					sprintf_P(_nmea, PSTR("\r\n"));
-					fputs(_nmea, &USBSerialStream);
+					//fputs(_nmea, &USBSerialStream);
+					//sprintf_P(_nmea, PSTR("\r\n"));
+					//fputs(_nmea, &USBSerialStream);
 
 					sprintf_P(_nmea, PSTR("Flash is Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
 					fputs(_nmea, &USBSerialStream);
