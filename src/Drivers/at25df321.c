@@ -38,7 +38,7 @@ void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 uint8_t read_status_register(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x05);
+	SPI_SendByte(_spi_dev, AT25DF321_READ_STATUS);
 	uint8_t status = SPI_ReceiveByte(_spi_dev);
 	_spi_port->OUTSET = chip_cs;
 
@@ -50,7 +50,7 @@ uint8_t read_status_register(uint8_t chip_cs)
 uint8_t device_is_ready(uint8_t chip_cs)
 {
 	// if bit 0 is cleared then the device is ready
-	if ((read_status_register(chip_cs) & (1<<0)) == 0)
+	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_RDYBSY) == 0)
 		return 1;
 
 	// device is not ready
@@ -62,7 +62,7 @@ uint8_t device_is_ready(uint8_t chip_cs)
 uint8_t write_succeeded(uint8_t chip_cs)
 {
 	// if bit 5 is clear, no error was detected so return true
-	if ((read_status_register(chip_cs) & (1<<5)) == 0)
+	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_EPE) == 0)
 		return 1;
 
 	// return false to indicate an error
@@ -75,7 +75,7 @@ void write_enable(uint8_t chip_cs)
 {
 	// write 06h to the chip to enable the write mode
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x06);
+	SPI_SendByte(_spi_dev, AT25DF321_WRITE_ENABLE);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -85,7 +85,7 @@ void write_disable(uint8_t chip_cs)
 {
 	// write 04h to the chip to disable the write mode
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x04);
+	SPI_SendByte(_spi_dev, AT25DF321_WRITE_DISABLE);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -99,7 +99,7 @@ int8_t is_valid(uint8_t chip_cs)
 		mfgid	= 0,
 		devid1	= 0;
 
-	SPI_SendByte(_spi_dev, 0x9f);
+	SPI_SendByte(_spi_dev, AT25DF321_READ_MFG_ID);
 	mfgid	= SPI_ReceiveByte(_spi_dev);
 	devid1	= SPI_ReceiveByte(_spi_dev);
 	SPI_SendByte(_spi_dev, 0);
@@ -107,7 +107,7 @@ int8_t is_valid(uint8_t chip_cs)
 
 	_spi_port->OUTSET = chip_cs;
 
-	return mfgid == 0x1F && devid1 == 0x47;
+	return mfgid == AT25DF321_MGF_ID && devid1 == AT25DF321_DEVICDE_ID;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ int8_t is_valid(uint8_t chip_cs)
 void global_unprotect(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x01);				// allow setting of the SPRL bit and the global protect/unprotect flags
+	SPI_SendByte(_spi_dev, AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
 	SPI_SendByte(
 		_spi_dev,
 		(0<<7) |					// SPRL bit.  0 = unlocked (default), 1 = locked
@@ -132,7 +132,7 @@ void global_unprotect(uint8_t chip_cs)
 void unprotect_sector(uint8_t chip_cs, uint8_t sector)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x39);
+	SPI_SendByte(_spi_dev, AT25DF321_UNPROTECT_SECTOR);
 	SPI_SendByte(_spi_dev, sector & 0x3F);
 	SPI_SendByte(_spi_dev, 0);
 	SPI_SendByte(_spi_dev, 0);
@@ -144,7 +144,7 @@ void unprotect_sector(uint8_t chip_cs, uint8_t sector)
 void protect_sector(uint8_t chip_cs, uint8_t sector)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x36);
+	SPI_SendByte(_spi_dev, AT25DF321_PROTECT_SECTOR);
 	SPI_SendByte(_spi_dev, sector & 0x3F);
 	SPI_SendByte(_spi_dev, 0);
 	SPI_SendByte(_spi_dev, 0);
@@ -170,7 +170,11 @@ void erase_block(uint8_t chip_cs, uint8_t mode, uint32_t address)
 void erase_block_4k(uint8_t chip_cs, uint32_t address)
 {
 	// 0x20
-	erase_block(chip_cs, 0x20, address & 0xFFFFF000);	// blank out the bottom 12 bits
+	erase_block(
+		chip_cs,
+		AT25DF321_BLOCK_ERASE_4K,
+		address & AT25DF321_BLK_MASK_4K		// blank out the bottom 12 bits
+	);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -178,7 +182,11 @@ void erase_block_4k(uint8_t chip_cs, uint32_t address)
 int erase_block_32k(uint8_t chip_cs, uint32_t address)
 {
 	// 0x52
-	erase_block(chip_cs, 0x52, address & 0xFFFFF000);	// blank out the bottom 15 bits
+	erase_block(
+		chip_cs,
+		AT25DF321_BLOCK_ERASE_32k,
+		address & AT25DF321_BLK_MASK_32K	// blank out the bottom 15 bits
+	);
 
 	return write_succeeded(chip_cs);
 }
@@ -188,7 +196,11 @@ int erase_block_32k(uint8_t chip_cs, uint32_t address)
 int erase_block_64k(uint8_t chip_cs, uint32_t address)
 {
 	// 0xD8
-	erase_block(chip_cs, 0xD8, address & 0xFFFF0000);	// blank out the bottom 16 bits
+	erase_block(
+		chip_cs,
+		AT25DF321_BLOCK_ERASE_64k,
+		address & AT25DF321_BLK_MASK_64K	// blank out the bottom 16 bits
+	);
 
 	return write_succeeded(chip_cs);
 }
@@ -198,28 +210,7 @@ int erase_block_64k(uint8_t chip_cs, uint32_t address)
 int erase_chip(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x60);
-	_spi_port->OUTSET = chip_cs;
-
-	return write_succeeded(chip_cs);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
-int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
-{
-	_spi_port->OUTCLR = chip_cs;
-	SPI_SendByte(_spi_dev, 0x02);
-	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
-	SPI_SendByte(_spi_dev, address >> 8);
-	SPI_SendByte(_spi_dev, address & 0xff);
-
-	int index = 0;
-	while(index < count)
-	{
-		SPI_SendByte(_spi_dev, pbuff[index++]);
-	}
-
+	SPI_SendByte(_spi_dev, AT25DF321_CHIP_ERASE);
 	_spi_port->OUTSET = chip_cs;
 
 	return write_succeeded(chip_cs);
@@ -231,11 +222,11 @@ int read_block(uint8_t chip_cs, uint32_t address, int count, char * pbuff)
 {
 	_spi_port->OUTCLR = chip_cs;
 
-	SPI_SendByte(_spi_dev, 0x03);	// high-speed SPI clock because it's good for all clock values
+	SPI_SendByte(_spi_dev, AT25DF321_READ_ARRAY);	// high-speed SPI clock because it's good for all clock values
 	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
-	SPI_SendByte(_spi_dev, address >> 8);
+	SPI_SendByte(_spi_dev, (address >> 8) & 0xFF);
 	SPI_SendByte(_spi_dev, address & 0xFF);
-	//SPI_SendByte(_spi_dev, 0);	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
+	SPI_SendByte(_spi_dev, 0);	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
 
 	int index = 0;
 	while (index < count)
@@ -246,4 +237,32 @@ int read_block(uint8_t chip_cs, uint32_t address, int count, char * pbuff)
 	_spi_port->OUTSET = chip_cs;
 
 	return index;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
+int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
+{
+	//write_enable(chip_cs);
+
+	_spi_port->OUTCLR = chip_cs;
+	
+	// issue the write enable command
+	SPI_SendByte(_spi_dev, AT25DF321_WRITE_ENABLE);
+
+	// send the address	
+	SPI_SendByte(_spi_dev, AT25DF321_BYTE_PAGE_PGM);
+	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
+	SPI_SendByte(_spi_dev, (address >> 8) & 0xFF);
+	SPI_SendByte(_spi_dev, address & 0xff);
+
+	int index = 0;
+	while(index < count)
+	{
+		SPI_SendByte(_spi_dev, pbuff[index++]);
+	}
+
+	_spi_port->OUTSET = chip_cs;
+
+	return write_succeeded(chip_cs);
 }

@@ -61,6 +61,7 @@ void Adafruit_GPS_Disable(void)
 void Adafruit_GPS_SendCommand(const char* command)
 {
 	Serial_SendString_P(_usart, command);
+	Serial_SendByte(_usart, '\r');
 	Serial_SendByte(_usart, '\n');
 }
 

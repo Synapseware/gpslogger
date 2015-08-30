@@ -67,6 +67,19 @@ void Timer_Initialize(void)
 		TCC0.CCB = F_CPU / 1024 * 0.05;
 		TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
 	}
+
+	// Configure TC1 for 20ms interrupts.  USB interractions
+	// will fire from this handler
+	{
+		/* Select clock source */
+		TC1_ConfigClockSource( &TCC1, TC_CLKSEL_DIV256_gc );
+
+		/* F_CPU / 256 / 1250 =  */
+		TC_SetPeriod( &TCC1, F_CPU / 1250 );
+
+		/* Setup interrupt for compare A */
+		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_HI_gc );
+	}
 }
 
 
@@ -174,43 +187,8 @@ void HandleLatestGpsMessage(void)
 	// parse specific messages
 	if (0 == strncmp(_nmea, "$GPGGA", 6))
 	{
-		// location data - save to flash!
-		if (!_hasFix)
-		{
-			// don't log anything unless we have a satellite fix
-			return;
-		}
-
-		// If the flash write address is less than 0, then no free pages remain
-		// don't write the data!
-		if (_flashWriteAddr < 0)
-		{
-			return;
-		}
-
-		sprintf_P(msg, PSTR("Found GPGGA message!\r\nSuspending GPS module.\r\n"));
-		fputs(msg, &USBSerialStream);
-
-		// TODO:
-		// Once we write data to the flash chip, the GPS should be disabled
-		Adafruit_GPS_Suspend();
-
-		sprintf_P(msg, PSTR("GPS module suspended.  Saving sentence to FLASH.\r\n"));
-		fputs(msg, &USBSerialStream);
-
-		//fputs(_nmea, &USBSerialStream);
-		//sprintf_P(msg, PSTR("\r\n"));
+		//sprintf_P(msg, PSTR("Found GPGGA message!\r\nSuspending GPS module.\r\n"));
 		//fputs(msg, &USBSerialStream);
-
-		// write latest message to flash
-		//write_enable(SPI_CS);
-		//write_block(SPI_CS, _flashWriteAddr, 128, _nmea);
-		//write_disable(SPI_CS);
-
-		_flashWriteAddr += 128;
-
-		sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
-		fputs(msg, &USBSerialStream);
 	}
 	else if (0 == strncmp(_nmea, "$GPRMC", 6))
 	{
@@ -238,6 +216,45 @@ void HandleLatestGpsMessage(void)
 		else
 			sprintf_P(msg, PSTR("data is void\r\n\r\n"));
 		fputs(msg, &USBSerialStream);
+
+		CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+
+		// location data - save to flash!
+		if (!_hasFix)
+		{
+			// don't log anything unless we have a satellite fix
+			return;
+		}
+
+		// If the flash write address is less than 0, then no free pages remain
+		// don't write the data!
+		if (_flashWriteAddr < 0)
+		{
+			return;
+		}
+
+		// TODO:
+		// Once we write data to the flash chip, the GPS should be disabled
+		Adafruit_GPS_Suspend();
+
+		sprintf_P(msg, PSTR("GPS module suspended.  Saving sentence to FLASH.\r\n"));
+		fputs(msg, &USBSerialStream);
+
+		//fputs(_nmea, &USBSerialStream);
+		//sprintf_P(msg, PSTR("\r\n"));
+		//fputs(msg, &USBSerialStream);
+
+		// write latest message to flash
+		//write_enable(SPI_CS);
+		//write_block(SPI_CS, _flashWriteAddr, 128, _nmea);
+		//write_disable(SPI_CS);
+
+		_flashWriteAddr += 128;
+
+		sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
+		fputs(msg, &USBSerialStream);
+
+		CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 	}
 	else if (0 == strncmp(_nmea, "$PMTK", 5))
 	{
@@ -275,23 +292,23 @@ void HandleLatestGpsMessage(void)
  */
 int main(void)
 {
-	int delay = 3;
+	int delay = 5;
 
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
-	GlobalInterruptEnable();
-
 	/* Locate the first initialzed page address in the flash storage device */
 	_flashWriteAddr = FindFirstFreeAddress();
+
+	GlobalInterruptEnable();
 
 	for (;;)
 	{
 		if (!_hostConnected)
 		{
-			delay = 3;
+			delay = 5;
 		}
 
 		if (_secondsTick && _hostConnected)
@@ -312,6 +329,19 @@ int main(void)
 
 					sprintf_P(_nmea, PSTR("Starting address: %lu\r\n"), _flashWriteAddr);
 					fputs(_nmea, &USBSerialStream);
+
+					sprintf_P(_nmea, PSTR("Version: "));
+					fputs(_nmea, &USBSerialStream);
+
+					CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+					Adafruit_GPS_SendCommand(PSTR(PMTK_Q_RELEASE));
+
+					_nmea[0] = 0;
+					while(!Adafruit_GPS_MessageAvailable());
+					Adafruit_GPS_CloneLastMessage(_nmea, sizeof(_nmea));
+
+					sprintf_P(_nmea, PSTR("%s\r\n"), _nmea);
+					CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 				}
 			}
 
@@ -327,15 +357,6 @@ int main(void)
 		{
 			DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 		}
-
-		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
-		CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-
-		CDC_ProcessControlStateChange();
-
-		/* Required calls */
-		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
-		USB_USBTask();
 	}
 }
 
@@ -371,9 +392,8 @@ void SetupHardware(void)
 	Adafruit_GPS_Enable();
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
-	//Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCONLY));
 	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
-	Adafruit_GPS_Suspend();
+	//Adafruit_GPS_Suspend();
 
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
@@ -468,4 +488,17 @@ ISR(TCC0_CCB_vect)
 {
 	// Turn the LED off
 	LED_PORT->OUTCLR = LED_PIN;
+}
+
+/** Interrupt handler for TCC0 Compare/Capture A */
+ISR(TCC1_CCA_vect)
+{
+	/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
+	CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+
+	CDC_ProcessControlStateChange();
+
+	/* Required calls */
+	CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+	USB_USBTask();
 }
