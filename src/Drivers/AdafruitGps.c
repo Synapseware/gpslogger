@@ -12,10 +12,12 @@ int8_t			_message_rdy	= 0;
 uint8_t			_data[256];
 int				_buffidx		= 0;
 
+/* Flags for GPS state */
+static uint8_t	_gps_flags		= 0;
+
 
 /** Message ready callback function */
 Adafruit_GPS_OnMessageReceived_t _onMessageReady = NULL;
-
 
 
 /** Initialize the Adafruit GPS library */
@@ -24,6 +26,7 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 	_usart		= usart;
 	_en_port	= en_port;
 	_en_pin		= en_pin;
+	_gps_flags	= 0;
 
 	// Initialize the USART ring buffer with the created storage array
 	//RingBuffer_InitBuffer(&Buffer, _data, sizeof(_data));
@@ -34,7 +37,7 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 	Serial_Init(_usart, 9600, false);
 
 	// enable specific USART interrupts
-	_usart->CTRLA = USART_RXCINTLVL_MED_gc |
+	_usart->CTRLA = USART_RXCINTLVL_LO_gc |
 					USART_TXCINTLVL_OFF_gc |
 					USART_DREINTLVL_OFF_gc;
 }
@@ -106,6 +109,126 @@ void Adafruit_GPS_Wakeup(void)
 	Adafruit_GPS_SendCommand(PSTR(PMTK_AWAKE));
 }
 
+/**  */
+void Adafruit_GPS_Update1Hz(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
+}
+
+/**  */
+void Adafruit_GPS_Update5Hz(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_5HZ));
+}
+
+/**  */
+void Adafruit_GPS_Update10Hz(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_UPDATE_10HZ));
+}
+
+/**  */
+void Adafruit_GPS_ColdStart(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_COLD_START));
+}
+
+/**  */
+void Adafruit_GPS_RMCOnly(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCONLY));
+}
+
+/**  */
+void Adafruit_GPS_RMCGGADual(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_RMCGGA));
+}
+
+/**  */
+void Adafruit_GPS_AllData(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_ALLDATA));
+}
+
+/**  */
+void Adafruit_GPS_OutputOff(void)
+{
+
+	Adafruit_GPS_SendCommand(PSTR(PMTK_SET_NMEA_OUTPUT_OFF));
+}
+
+/** Simple status mask helper */
+static bool Adafruit_GPS_ModuleStatus(uint8_t MASK)
+{
+	return ((_gps_flags & MASK) != 0)
+		? true
+		: false;
+}
+
+/** Private method: Processes some of the GPS messages */
+static bool _Adafruit_GPS_Process_Latest(void)
+{
+	char cmd_buff[24];
+
+	// check for init
+	strlcpy_P(cmd_buff, PSTR(PGACK_INIT_COMPLETE), sizeof(cmd_buff));
+	if (0 == strncmp((const char*)_data, cmd_buff, 13))
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_INIT;
+		return true;
+	}
+
+	// check for cold start
+	strlcpy_P(cmd_buff, PSTR(PGACK_COLD_STARTUP), sizeof(cmd_buff));
+	if (0 == strncmp((const char*)_data, cmd_buff, 13))
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_COLD_START;
+		return true;
+	}
+
+	// check for ident
+	strlcpy_P(cmd_buff, PSTR(PGACK_CHIP_IDENT), sizeof(cmd_buff));
+	if (0 == strncmp((const char*)_data, cmd_buff, 18))
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_IDENT;
+		return true;
+	}
+
+	// check for standby status
+	strlcpy_P(cmd_buff, PSTR(PMTK_STANDBY_SUCCESS), sizeof(cmd_buff));
+	if (0 == strncmp((const char*)_data, cmd_buff, 17))
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_STANDBYOK;
+		return true;
+	}
+
+	// check for awake status
+	strlcpy_P(cmd_buff, PSTR(PMTK_AWAKE), sizeof(cmd_buff));
+	if (0 == strncmp((const char*)_data, cmd_buff, 15))
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_AWAKE;
+		return true;
+	}
+
+	// check for config complete
+	strlcpy_P(cmd_buff, PSTR(PGACK_CONFIG_COMPLETE), sizeof(cmd_buff));
+	if (0 == strncmp((const char*)_data, cmd_buff, 15))
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_READY;
+		return true;
+	}
+
+	// no intercept done
+	return false;
+}
 
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
@@ -122,6 +245,11 @@ ISR(USARTE0_RXC_vect)
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
 	{
+		// If we handled this message, then don't signal message receipt
+		//if (_Adafruit_GPS_Process_Latest())
+		//	return;
+
+		// Signal message receipt
 		_message_rdy = 1;
 		_data[_buffidx] = 0;
 

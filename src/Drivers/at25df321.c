@@ -97,17 +97,20 @@ int8_t is_valid(uint8_t chip_cs)
 
 	uint8_t
 		mfgid	= 0,
-		devid1	= 0;
+		devid1	= 0,
+		extinfo	= 0;
 
 	SPI_SendByte(_spi_dev, AT25DF321_READ_MFG_ID);
 	mfgid	= SPI_ReceiveByte(_spi_dev);
 	devid1	= SPI_ReceiveByte(_spi_dev);
-	SPI_SendByte(_spi_dev, 0);
-	SPI_SendByte(_spi_dev, 0);
+	extinfo |= SPI_ReceiveByte(_spi_dev);
+	extinfo |= SPI_ReceiveByte(_spi_dev);
 
 	_spi_port->OUTSET = chip_cs;
 
-	return mfgid == AT25DF321_MGF_ID && devid1 == AT25DF321_DEVICDE_ID;
+	return mfgid == AT25DF321_MGF_ID &&
+		devid1 == AT25DF321_DEVICDE_ID &&
+		extinfo == 0;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
