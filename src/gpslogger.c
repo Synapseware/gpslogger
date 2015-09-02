@@ -11,7 +11,7 @@ volatile int32_t	_flashWriteAddr		= 0;
 static char			_nmea[256];
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
-static char			_flashBuffer[128];
+static char			_flashBuffer[256];
 
 
 
@@ -191,11 +191,19 @@ bool SaveNMEA(void)
 	fputs(msg, &USBSerialStream);
 
 	// write latest message to flash
-	write_enable(SPI_CS);
-	write_block(SPI_CS, _flashWriteAddr, 128, _flashBuffer);
-	write_disable(SPI_CS);
+	int idx = 0;
+	begin_write(SPI_CS, _flashWriteAddr);
+	while (sentenceLength && _flashBuffer[idx])
+	{
+		write_byte(_flashBuffer[idx++]);
+	}
+	end_write(SPI_CS);
 
-	_flashWriteAddr += 128;
+	//write_enable(SPI_CS);
+	//write_block(SPI_CS, _flashWriteAddr, sentenceLength, _flashBuffer);
+	//write_disable(SPI_CS);
+
+	_flashWriteAddr += strlen(_flashBuffer);
 
 	sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
 	fputs(msg, &USBSerialStream);

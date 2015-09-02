@@ -83,6 +83,10 @@ void global_unprotect(uint8_t chip_cs);
 /** Writes a block of bytes to the flash device */
 int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff);
 
+void begin_write(uint8_t chip_cs, uint32_t address);
+void write_byte(char data);
+void end_write(uint8_t chip_cs);
+
 /** Reads a block of bytes from the flash device */
 int read_block(uint8_t chip_cs, uint32_t address, int count, char* pbuff);
 

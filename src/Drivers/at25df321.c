@@ -243,13 +243,11 @@ int read_block(uint8_t chip_cs, uint32_t address, int count, char * pbuff)
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
-int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
+// Sets up the flash for a write operation
+void begin_write(uint8_t chip_cs, uint32_t address)
 {
-	//write_enable(chip_cs);
-
 	_spi_port->OUTCLR = chip_cs;
-	
+
 	// issue the write enable command
 	SPI_SendByte(_spi_dev, AT25DF321_WRITE_ENABLE);
 
@@ -258,6 +256,28 @@ int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff
 	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
 	SPI_SendByte(_spi_dev, (address >> 8) & 0xFF);
 	SPI_SendByte(_spi_dev, address & 0xff);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Send a byte to the flash - must have been preceeded by a begin_write call
+void write_byte(char data)
+{
+	SPI_SendByte(_spi_dev, data);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Ends a write transaction
+void end_write(uint8_t chip_cs)
+{
+	//
+	_spi_port->OUTSET = chip_cs;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
+int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
+{
+	begin_write(chip_cs, address);
 
 	int index = 0;
 	while(index < count)
@@ -265,7 +285,9 @@ int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff
 		SPI_SendByte(_spi_dev, pbuff[index++]);
 	}
 
-	_spi_port->OUTSET = chip_cs;
+	end_write(chip_cs);
 
-	return write_succeeded(chip_cs);
+	bool success = write_succeeded(chip_cs);
+
+	return success;
 }
