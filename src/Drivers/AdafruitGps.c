@@ -9,7 +9,7 @@ uint8_t			_en_pin			= 0;
 int8_t			_message_rdy	= 0;
 
 /** Create the buffer structure and its underlying storage array */
-uint8_t			_data[256];
+char			_data[256];
 int				_buffidx		= 0;
 
 /* Flags for GPS state */
@@ -245,8 +245,8 @@ ISR(USARTE0_RXC_vect)
 	if ('\n' == data)
 	{
 		// If we handled this message, then don't signal message receipt
-		//if (_Adafruit_GPS_Process_Latest())
-		//	return;
+		if (_Adafruit_GPS_Process_Latest())
+			return;
 
 		// Signal message receipt
 		_message_rdy = 1;

@@ -41,6 +41,9 @@
 #define DIAG_LED_port	(&PORTC)
 #define DIAG_LED_pin	PIN0_bm
 
+#define ERR_LED_port	(&PORTC)
+#define ERR_LED_pin		PIN1_bm
+
 #define SPI_DEVICE		SPIC
 #define SPI_PORT		(&PORTC)
 #define SPI_CS			PIN4_bm

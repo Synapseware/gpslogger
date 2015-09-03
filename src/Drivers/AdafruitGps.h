@@ -52,9 +52,9 @@
 #define PGCMD_NOANTENNA					"$PGCMD,33,0*6D" 
 
 // NMEA sentence types
-#define NMEA_GPGGA						"$GPGGA"
-#define NMEA_GPRMC						"$GPRMC"
-#define NMEA_PMTK						"$PMTK"
+#define PMTK_GPGGA_PREAMBLE				"$GPGGA"
+#define PMTK_GPRMC_PREAMBLE				"$GPRMC"
+#define PMTK_PREAMBLE					"$PMTK"
 
 // startup status messages
 #define PGACK_COLD_STARTUP				"$PGACK,103*40"
@@ -70,7 +70,7 @@
 #define ADAFRUIT_GPS_FLAGS_STANDBYOK	(1<<5)
 
 
-typedef void (*Adafruit_GPS_OnMessageReceived_t)(char*, int);
+typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, uint16_t);
 
 void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin);
 void Adafruit_GPS_Enable(void);

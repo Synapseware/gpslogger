@@ -16,7 +16,7 @@
 
 //---------------------------------------------------
 // Read commands
-#define AT25DF321_READ_ARRAY			0x0B
+#define AT25DF321_READ_ARRAY_FAST		0x0B
 #define AT25DF321_READ_ARRAY_SLOW		0x03
 
 // Program and erase commands
@@ -80,14 +80,19 @@ void write_enable(uint8_t chip_cs);
 void write_disable(uint8_t chip_cs);
 void global_unprotect(uint8_t chip_cs);
 
+bool is_valid(uint8_t chip_cs);
+
+bool device_is_ready(uint8_t chip_cs);
+bool write_succeeded(uint8_t chip_cs);
+
 /** Writes a block of bytes to the flash device */
-int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff);
+int write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
 
 void begin_write(uint8_t chip_cs, uint32_t address);
 void write_byte(char data);
 void end_write(uint8_t chip_cs);
 
 /** Reads a block of bytes from the flash device */
-int read_block(uint8_t chip_cs, uint32_t address, int count, char* pbuff);
+int read_block(uint8_t chip_cs, uint32_t address, char* pbuff, int count);
 
 #endif

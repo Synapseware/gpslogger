@@ -47,26 +47,26 @@ uint8_t read_status_register(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns a 1 if the device is ready for erase or program operations
-uint8_t device_is_ready(uint8_t chip_cs)
+bool device_is_ready(uint8_t chip_cs)
 {
 	// if bit 0 is cleared then the device is ready
 	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_RDYBSY) == 0)
-		return 1;
+		return true;
 
 	// device is not ready
-	return 0;
+	return false;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns 1 if the device encountered an erase or program error
-uint8_t write_succeeded(uint8_t chip_cs)
+bool write_succeeded(uint8_t chip_cs)
 {
 	// if bit 5 is clear, no error was detected so return true
 	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_EPE) == 0)
-		return 1;
+		return true;
 
 	// return false to indicate an error
-	return 0;
+	return false;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -91,7 +91,7 @@ void write_disable(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns a 1 if the chip is an at25df321, 0 if not
-int8_t is_valid(uint8_t chip_cs)
+bool is_valid(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
 
@@ -221,15 +221,17 @@ int erase_chip(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // reads 'count' bytes into 'pbuff' array and returns the number of bytes read
-int read_block(uint8_t chip_cs, uint32_t address, int count, char * pbuff)
+int read_block(uint8_t chip_cs, uint32_t address, char * pbuff, int count)
 {
 	_spi_port->OUTCLR = chip_cs;
 
-	SPI_SendByte(_spi_dev, AT25DF321_READ_ARRAY);	// high-speed SPI clock because it's good for all clock values
+	SPI_SendByte(_spi_dev, AT25DF321_READ_ARRAY_FAST);
 	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
 	SPI_SendByte(_spi_dev, (address >> 8) & 0xFF);
 	SPI_SendByte(_spi_dev, address & 0xFF);
-	SPI_SendByte(_spi_dev, 0);	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
+
+	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
+	SPI_SendByte(_spi_dev, 0);
 
 	int index = 0;
 	while (index < count)
@@ -249,9 +251,10 @@ void begin_write(uint8_t chip_cs, uint32_t address)
 	_spi_port->OUTCLR = chip_cs;
 
 	// issue the write enable command
-	SPI_SendByte(_spi_dev, AT25DF321_WRITE_ENABLE);
+	write_enable(chip_cs);
 
 	// send the address	
+	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_BYTE_PAGE_PGM);
 	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
 	SPI_SendByte(_spi_dev, (address >> 8) & 0xFF);
@@ -275,7 +278,7 @@ void end_write(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
-int write_block(uint8_t chip_cs, uint32_t address, int count, const char * pbuff)
+int write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count)
 {
 	begin_write(chip_cs, address);
 
