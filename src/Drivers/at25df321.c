@@ -170,7 +170,7 @@ void erase_block(uint8_t chip_cs, uint8_t mode, uint32_t address)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // 
-void erase_block_4k(uint8_t chip_cs, uint32_t address)
+bool erase_block_4k(uint8_t chip_cs, uint32_t address)
 {
 	// 0x20
 	erase_block(
@@ -178,11 +178,13 @@ void erase_block_4k(uint8_t chip_cs, uint32_t address)
 		AT25DF321_BLOCK_ERASE_4K,
 		address & AT25DF321_BLK_MASK_4K		// blank out the bottom 12 bits
 	);
+
+	return write_succeeded(chip_cs);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // 
-int erase_block_32k(uint8_t chip_cs, uint32_t address)
+bool erase_block_32k(uint8_t chip_cs, uint32_t address)
 {
 	// 0x52
 	erase_block(
@@ -196,7 +198,7 @@ int erase_block_32k(uint8_t chip_cs, uint32_t address)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // 
-int erase_block_64k(uint8_t chip_cs, uint32_t address)
+bool erase_block_64k(uint8_t chip_cs, uint32_t address)
 {
 	// 0xD8
 	erase_block(
@@ -210,7 +212,7 @@ int erase_block_64k(uint8_t chip_cs, uint32_t address)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // erases the complete chip
-int erase_chip(uint8_t chip_cs)
+bool erase_chip(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_CHIP_ERASE);
@@ -219,9 +221,7 @@ int erase_chip(uint8_t chip_cs)
 	return write_succeeded(chip_cs);
 }
 
-// -------------------------------------------------------------------------------------------------------------------------
-// reads 'count' bytes into 'pbuff' array and returns the number of bytes read
-int read_block(uint8_t chip_cs, uint32_t address, char * pbuff, int count)
+void begin_read(uint8_t chip_cs, uint32_t address)
 {
 	_spi_port->OUTCLR = chip_cs;
 
@@ -232,6 +232,25 @@ int read_block(uint8_t chip_cs, uint32_t address, char * pbuff, int count)
 
 	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
 	SPI_SendByte(_spi_dev, 0);
+}
+
+void end_read(uint8_t chip_cs)
+{
+
+	_spi_port->OUTSET = chip_cs;
+}
+
+char read_byte(void)
+{
+
+	return SPI_ReceiveByte(_spi_dev);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// reads 'count' bytes into 'pbuff' array and returns the number of bytes read
+int read_block(uint8_t chip_cs, uint32_t address, char * pbuff, int count)
+{
+	begin_read(chip_cs, address);
 
 	int index = 0;
 	while (index < count)
@@ -239,7 +258,8 @@ int read_block(uint8_t chip_cs, uint32_t address, char * pbuff, int count)
 		// clock in the data from the chip
 		pbuff[index++] = SPI_ReceiveByte(_spi_dev);
 	}
-	_spi_port->OUTSET = chip_cs;
+
+	end_read(chip_cs);
 
 	return index;
 }
@@ -265,6 +285,7 @@ void begin_write(uint8_t chip_cs, uint32_t address)
 // Send a byte to the flash - must have been preceeded by a begin_write call
 void write_byte(char data)
 {
+
 	SPI_SendByte(_spi_dev, data);
 }
 

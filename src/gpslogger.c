@@ -8,10 +8,9 @@ volatile int32_t	_flashWriteAddr		= 0;
 
 
 /** NMEA processing data & flags */
-static char			_nmea[256];
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
-static char			_flashBuffer[256];
+static char			_nmea[256];
 static char			_gpsVersion[96];
 
 
@@ -106,11 +105,6 @@ int32_t FindFirstFreeAddress(void)
 	char msg[128];
 
 	uint8_t status = device_is_ready(SPI_CS);
-	sprintf_P(msg, PSTR("  Device is ready: %i\r\n"), status);
-	fputs(msg, &USBSerialStream);
-
-	sprintf_P(msg, PSTR("  Looking for a free page in flash\r\n"));
-	fputs(msg, &USBSerialStream);
 
 	sprintf_P(msg, PSTR("  Page count: %lu\r\n"), FLASH_PAGE_COUNT);
 	fputs(msg, &USBSerialStream);
@@ -119,54 +113,52 @@ int32_t FindFirstFreeAddress(void)
 	sprintf_P(msg, PSTR("  Total size: %lu\r\n"), FLASH_TOTAL_SIZE);
 	fputs(msg, &USBSerialStream);
 
-	sprintf_P(msg, PSTR("  Checking page:\r\n"));
-	fputs(msg, &USBSerialStream);
-
-	char page[256];
-	uint32_t address = 0;
-	for (int i = 0; i < FLASH_PAGE_COUNT; i++)
+	if (!status)
 	{
-		// compute next read address
-		address = i * FLASH_PAGE_SIZE;
-
-		sprintf_P(msg, PSTR("% -8lu"), address);
+		sprintf_P(msg, PSTR("  Flash is not ready!\r\n"));
 		fputs(msg, &USBSerialStream);
-
-		if (((i+1) % 14) == 0)
-		{
-			sprintf_P(msg, PSTR("\r\n"));
-			fputs(msg, &USBSerialStream);
-		}
-
-		// read the specific block of data from the dataflash
-		read_block(SPI_CS, address, page, sizeof(page));
-
-		// check if the whole block is initialized (all bytes = 0xFF)
-		bool blockIsValid = true;
-		for (int j = 0; j < sizeof(page); j++)
-		{
-			if (0xFF != page[j])
-			{
-				blockIsValid = false;
-				break;
-			}
-		}
-
-		if (blockIsValid)
-		{
-			sprintf_P(msg, PSTR("\r\n  Found an open page at address %i\r\n"), address);
-			fputs(msg, &USBSerialStream);
-
-			// found an empty block, let's start here
-			return address;
-		}
+		return -1;
 	}
 
-	sprintf_P(msg, PSTR("\r\n  No free pages found!\r\n"));
+	sprintf_P(msg, PSTR("  Flash is ready: %i\r\n"), status);
 	fputs(msg, &USBSerialStream);
 
-	// no wholly initialized blocks available!
-	return -1;
+	sprintf_P(msg, PSTR("  Searching for free start address...\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	int32_t address = 0;
+	int32_t freefrom = -1;
+
+	begin_read(SPI_CS, address);
+	while (address < FLASH_TOTAL_SIZE)
+	{
+		// look for the first 0xFF followed by 0xFF's to the end
+		char data = read_byte();
+		address++;
+
+		if (0xFF == data)
+		{
+			if (freefrom < 0)
+				freefrom = address - 1;
+		}
+		else
+		{
+			freefrom = -1;
+		}
+	}
+	end_read(SPI_CS);
+
+	if (freefrom > -1)
+	{
+		sprintf_P(msg, PSTR("  First open address: %u\r\n"), freefrom);
+	}
+	else
+	{
+		sprintf_P(msg, PSTR("  No free pages found!\r\n"));
+	}
+	fputs(msg, &USBSerialStream);
+
+	return freefrom;
 }
 
 /** Saves the latest NMEA logging data to the flash */
@@ -176,8 +168,8 @@ bool SaveNMEA(void)
 	char msg[64];
 
 	// make sure our string is NULL terminated
-	size_t sentenceLength = strlen(_flashBuffer);
-	if (_flashWriteAddr < 0 || sentenceLength >= sizeof(_flashBuffer))
+	size_t sentenceLength = strlen(_nmea);
+	if (_flashWriteAddr < 0 || sentenceLength >= sizeof(_nmea))
 	{
 		sprintf_P(msg, PSTR("Invalid logging message!\r\n"));
 		fputs(msg, &USBSerialStream);
@@ -186,7 +178,7 @@ bool SaveNMEA(void)
 
 	sprintf_P(msg, PSTR("Saving NMEA sentence: "));
 	fputs(msg, &USBSerialStream);
-	fputs(_flashBuffer, &USBSerialStream);
+	fputs(_nmea, &USBSerialStream);
 	sprintf_P(msg, PSTR("\r\n"));
 	fputs(msg, &USBSerialStream);
 
@@ -202,10 +194,8 @@ bool SaveNMEA(void)
 	// write latest message to flash
 	int idx = 0;
 	begin_write(SPI_CS, _flashWriteAddr);
-	while (sentenceLength && _flashBuffer[idx])
+	while (sentenceLength && _nmea[idx])
 	{
-		write_byte(_flashBuffer[idx++]);
-		_flashWriteAddr++;
 		if ((_flashWriteAddr % FLASH_PAGE_SIZE) == 0)
 		{
 			end_write(SPI_CS);
@@ -213,14 +203,17 @@ bool SaveNMEA(void)
 			// wait for write to complete
 			while(!device_is_ready(SPI_CS));
 		}
+
+		write_byte(_nmea[idx++]);
+		_flashWriteAddr++;
 	}
 	end_write(SPI_CS);
 
 	//write_enable(SPI_CS);
-	//write_block(SPI_CS, _flashWriteAddr, sentenceLength, _flashBuffer);
+	//write_block(SPI_CS, _flashWriteAddr, sentenceLength, _nmea);
 	//write_disable(SPI_CS);
 
-	_flashWriteAddr += strlen(_flashBuffer);
+	_flashWriteAddr += strlen(_nmea);
 
 	sprintf_P(msg, PSTR("Data saved.\r\n\r\n"));
 	fputs(msg, &USBSerialStream);
@@ -228,57 +221,35 @@ bool SaveNMEA(void)
 	return true;
 }
 
-/** Callback function which is invoked when a complete message is received */
+/** Callback function which is invoked when a complete message is received
+This method is run from the UART RX interrupt */
 void HandleLatestGpsMessage(const char* message, uint16_t length)
 {
-	char msg[64];
 	char cmd_buff[16];
-	bool processed = false;
-
-	if (NULL == message)
-		ERR_LED_port->OUTSET = ERR_LED_pin;
 
 	// make sure we have a valid sentence
 	if (length < 5 || NULL == message)
 	{
-		sprintf_P(msg, PSTR("Invalid data received in GPS message handler:\r\n"));
-		fputs(msg, &USBSerialStream);
-		sprintf_P(msg, PSTR("  message? %c\r\n"), NULL == message ? 'b' : 'g');
-		fputs(msg, &USBSerialStream);
-		sprintf_P(msg, PSTR("  length? %c\r\n"), length < 5 ? 'b' : 'g');
-		fputs(msg, &USBSerialStream);
-
 		// nothing to do
+		ERR_LED_port->OUTSET = ERR_LED_pin;
 		return;
 	}
 
+	// clear the error LED
 	ERR_LED_port->OUTCLR = ERR_LED_pin;
-
-	// Clone the most recent GPS message
-	strncpy(_nmea, message, sizeof(_nmea));
 
 	// signal GPS message receipt
 	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 
-	// parse specific messages
-	strlcpy_P(cmd_buff, PSTR(PMTK_GPGGA_PREAMBLE), sizeof(cmd_buff));
-	if (!processed && 0 == strncmp((const char*)_nmea, cmd_buff, 6))
-	{
-		//sprintf_P(msg, PSTR("Found GPGGA message!\r\nSuspending GPS module.\r\n"));
-		//fputs(msg, &USBSerialStream);
-
-		processed = true;
-	}
-
 	// parse GPRMC - recommended minimum navigation data
-	strlcpy_P(cmd_buff, PSTR(PMTK_GPRMC_PREAMBLE), sizeof(cmd_buff));
-	if (!processed && 0 == strncmp((const char*)_nmea, cmd_buff, 6))
+	strlcpy_P(cmd_buff, PSTR(PMTK_GPRMC_HEADER), sizeof(cmd_buff));
+	if (0 == strncmp(message, cmd_buff, 6))
 	{
 		// process fix data - look for 'V' or 'A'
 		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 		// no fix:		$GPRMC,072450.000,V,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 
-		char* p = strchr(_nmea, ',') + 1;
+		char* p = strchr(message, ',') + 1;
 
 		/*
 		float timef = atof(p);
@@ -293,61 +264,43 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 
 		// check for an A (active) character which indicate a valid GPS satellite fix
 		_hasFix = ('A' == p[0]);
-		if (_hasFix)
-			sprintf_P(msg, PSTR("GPS fix active!\r\n\r\n"));
-		else
-			sprintf_P(msg, PSTR("data is void\r\n\r\n"));
-		fputs(msg, &USBSerialStream);
 
 		// location data - save to flash!
 		if (_hasFix)
 		{
 			// reset the flash buffer
-			memset(_flashBuffer, 0, sizeof(_flashBuffer));
+			memset(_nmea, 0, sizeof(_nmea));
 
 			// copy the NMEA sentence to the flash buffer
-			strncpy(_flashBuffer, _nmea, sizeof(_flashBuffer));
+			strncpy(_nmea, message, sizeof(_nmea));
 
 			_saveNmea = true;
 		}
 
-		processed = true;
+		DIAG_LED_port->OUTCLR = DIAG_LED_pin;
+		return;
 	}
 
 	// Parse PMTK
-	strlcpy_P(cmd_buff, PSTR(PMTK_PREAMBLE), sizeof(cmd_buff));
-	if (!processed && 0 == strncmp((const char*)_nmea, cmd_buff, 5))
+	strlcpy_P(cmd_buff, PSTR(PMTK_HEADER), sizeof(cmd_buff));
+	if (0 == strncmp(message, cmd_buff, 5))
 	{
 		strlcpy_P(cmd_buff, PSTR(PMTK_AWAKE), sizeof(cmd_buff));
-		if (0 == strncmp((const char*)_nmea, cmd_buff, 15))
+		if (0 == strncmp(message, cmd_buff, 15))
 		{
-			sprintf_P(msg, PSTR("GPS module is awake\r\n"));
-			fputs(msg, &USBSerialStream);
+			// GPS is awake
 		}
 
 		strlcpy_P(cmd_buff, PSTR(PMTK_VERSION_HEADER), sizeof(cmd_buff));
-		if (0 == strncmp((const char*)_nmea, cmd_buff, 9))
+		if (0 == strncmp(message, cmd_buff, 9))
 		{
-			strncpy(_gpsVersion, (const char*)_nmea, sizeof(_gpsVersion));
+			strncpy(_gpsVersion, message, sizeof(_gpsVersion));
 		}
 
-		sprintf_P(msg, PSTR("Found PMTK message!\r\n"));
-		fputs(msg, &USBSerialStream);
-
-		// GPS module status info
-		// process any status messages from the GPS
-
-		fputs(_nmea, &USBSerialStream);
-		sprintf_P(msg, PSTR("\r\n"));
-		fputs(msg, &USBSerialStream);
-
-		// mark block as complete
-		processed = true;
+		DIAG_LED_port->OUTCLR = DIAG_LED_pin;
+		return;
 	}
-
-	DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 }
-
 
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
@@ -356,6 +309,8 @@ int main(void)
 {
 	int delay = 3;
 	_saveNmea = false;
+	memset(_nmea, 0, sizeof(_nmea));
+	memset(_gpsVersion, 0, sizeof(_gpsVersion));
 
 	SetupHardware();
 
@@ -364,13 +319,8 @@ int main(void)
 
 	GlobalInterruptEnable();
 
-	sprintf_P(_nmea, PSTR("This is a test write for the flash chip."));
-	write_block(SPI_CS, 0, strlen(_nmea), _nmea);
-	sprintf_P(_nmea, PSTR("Waiting for write to complete\r\n"));
-	fputs(_nmea, &USBSerialStream);
-	while(!device_is_ready(SPI_CS));
-	sprintf_P(_nmea, PSTR("Done with test message\r\n"));
-	fputs(_nmea, &USBSerialStream);
+	// reset the first block
+	erase_block_4k(SPI_CS, 0);
 
 	for (;;)
 	{
@@ -392,25 +342,26 @@ int main(void)
 
 				if (!delay)
 				{
-					sprintf_P(_nmea, PSTR("GPS Logger v1.1 - 20150801\r\n"));
-					fputs(_nmea, &USBSerialStream);
+					char msg[64];
+					sprintf_P(msg, PSTR("GPS Logger v1.1 - 20150801\r\n"));
+					fputs(msg, &USBSerialStream);
 
 					if (0 != strlen(_gpsVersion))
 					{
-						sprintf_P(_nmea, PSTR("GPS Version: %s\r\n"), _gpsVersion);
+						sprintf_P(msg, PSTR("GPS Version: %s\r\n"), _gpsVersion);
 					}
 					else
 					{
-						sprintf_P(_nmea, PSTR("GPS Version: (unknown)\r\n"));
+						sprintf_P(msg, PSTR("GPS Version: (unknown)\r\n"));
 					}
-					fputs(_nmea, &USBSerialStream);
+					fputs(msg, &USBSerialStream);
 
-					sprintf_P(_nmea, PSTR("Flash is Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
-					fputs(_nmea, &USBSerialStream);
+					sprintf_P(msg, PSTR("Flash is Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
+					fputs(msg, &USBSerialStream);
 
 					_flashWriteAddr = FindFirstFreeAddress();
-					sprintf_P(_nmea, PSTR("Flash start: %lu\r\n"), _flashWriteAddr);
-					fputs(_nmea, &USBSerialStream);
+					sprintf_P(msg, PSTR("Flash start: %lu\r\n"), _flashWriteAddr);
+					fputs(msg, &USBSerialStream);
 				}
 			}
 
@@ -462,7 +413,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_64 |
+		SPI_SPEED_FCPU_DIV_2 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING

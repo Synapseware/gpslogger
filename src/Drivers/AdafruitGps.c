@@ -130,6 +130,21 @@ void Adafruit_GPS_ColdStart(void)
 }
 
 /**  */
+void Adafruit_GPS_WarmStart(void)
+{
+	// issue the cold start command
+	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_WARM_START));
+}
+
+/**  */
+void Adafruit_GPS_HotStart(void)
+{
+	// issue the cold start command
+	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_HOT_START));
+}
+
+
+/**  */
 void Adafruit_GPS_RMCOnly(void)
 {
 	// 

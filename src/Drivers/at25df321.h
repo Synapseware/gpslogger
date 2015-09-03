@@ -8,7 +8,6 @@
 #include <inttypes.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
 
-
 #define	FLASH_TOTAL_SIZE				4194304UL
 #define	FLASH_PAGE_SIZE					256UL
 #define	FLASH_PAGE_COUNT		(FLASH_TOTAL_SIZE / FLASH_PAGE_SIZE)
@@ -85,12 +84,21 @@ bool is_valid(uint8_t chip_cs);
 bool device_is_ready(uint8_t chip_cs);
 bool write_succeeded(uint8_t chip_cs);
 
+bool erase_block_4k(uint8_t chip_cs, uint32_t address);
+bool erase_block_32k(uint8_t chip_cs, uint32_t address);
+bool erase_block_64k(uint8_t chip_cs, uint32_t address);
+bool erase_chip(uint8_t chip_cs);
+
 /** Writes a block of bytes to the flash device */
 int write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
 
 void begin_write(uint8_t chip_cs, uint32_t address);
 void write_byte(char data);
 void end_write(uint8_t chip_cs);
+
+void begin_read(uint8_t chip_cs, uint32_t address);
+void end_read(uint8_t chip_cs);
+char read_byte(void);
 
 /** Reads a block of bytes from the flash device */
 int read_block(uint8_t chip_cs, uint32_t address, char* pbuff, int count);

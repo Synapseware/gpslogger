@@ -14,6 +14,8 @@
 #define PMTK_SET_NMEA_UPDATE_10HZ		"$PMTK220,100*2F"
 
 #define PMTK_CMD_COLD_START				"$PMTK103*30"
+#define PMTK_CMD_WARM_START				"$PMTK102*31"
+#define PMTK_CMD_HOT_START				"$PMTK102*32"
 
 #define PMTK_SET_BAUD_57600				"$PMTK251,57600*2C"
 #define PMTK_SET_BAUD_9600				"$PMTK251,9600*17"
@@ -52,9 +54,9 @@
 #define PGCMD_NOANTENNA					"$PGCMD,33,0*6D" 
 
 // NMEA sentence types
-#define PMTK_GPGGA_PREAMBLE				"$GPGGA"
-#define PMTK_GPRMC_PREAMBLE				"$GPRMC"
-#define PMTK_PREAMBLE					"$PMTK"
+#define PMTK_GPGGA_HEADER				"$GPGGA"
+#define PMTK_GPRMC_HEADER				"$GPRMC"
+#define PMTK_HEADER						"$PMTK"
 
 // startup status messages
 #define PGACK_COLD_STARTUP				"$PGACK,103*40"
@@ -86,6 +88,8 @@ void Adafruit_GPS_Update1Hz(void);
 void Adafruit_GPS_Update5Hz(void);
 void Adafruit_GPS_Update10Hz(void);
 void Adafruit_GPS_ColdStart(void);
+void Adafruit_GPS_WarmStart(void);
+void Adafruit_GPS_HotStart(void);
 
 void Adafruit_GPS_RMCOnly(void);
 void Adafruit_GPS_RMCGGADual(void);
