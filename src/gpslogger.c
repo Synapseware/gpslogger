@@ -123,6 +123,22 @@ int32_t FindFirstFreeAddress(void)
 	sprintf_P(msg, PSTR("  Flash is ready: %i\r\n"), status);
 	fputs(msg, &USBSerialStream);
 
+	sprintf_P(msg, PSTR("  Formatting flash\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	erase_chip(SPI_CS);
+
+	sprintf_P(msg, PSTR("  Waiting for format to complete\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	// wait for RDY/BSY to clear
+	while (!device_is_ready(SPI_CS));
+
+	sprintf_P(msg, PSTR("  Formatted\r\n"));
+	fputs(msg, &USBSerialStream);
+	/*
+	*/
+
 	sprintf_P(msg, PSTR("  Searching for free start address...\r\n"));
 	fputs(msg, &USBSerialStream);
 
@@ -209,9 +225,7 @@ bool SaveNMEA(void)
 	}
 	end_write(SPI_CS);
 
-	//write_enable(SPI_CS);
 	//write_block(SPI_CS, _flashWriteAddr, sentenceLength, _nmea);
-	//write_disable(SPI_CS);
 
 	_flashWriteAddr += strlen(_nmea);
 
@@ -319,9 +333,6 @@ int main(void)
 
 	GlobalInterruptEnable();
 
-	// reset the first block
-	erase_block_4k(SPI_CS, 0);
-
 	for (;;)
 	{
 		if (_saveNmea)
@@ -413,7 +424,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_2 |
+		SPI_SPEED_FCPU_DIV_32 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING

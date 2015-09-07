@@ -42,13 +42,14 @@
 
 // standby command & boot successful message
 #define PMTK_STANDBY					"$PMTK161,0*28"
-#define PMTK_STANDBY_SUCCESS			"$PMTK001,161,3*36"  // Not needed currently
+#define PMTK_STANDBY_SUCCESS			"$PMTK001,161,3*36"
 #define PMTK_AWAKE						"$PMTK010,002*2D"
 #define PMTK_VERSION_HEADER				"$PMTK705,"
 
 // ask for the release and version
-#define PMTK_Q_RELEASE					"$PMTK605*31" // returns something like "$PMTK705,AXN_2.10_3339_2012072601,5223,PA6H,1.0*6A"
-
+// returns something like "$PMTK705,AXN_2.10_3339_2012072601,5223,PA6H,1.0*6A"
+#define PMTK_Q_RELEASE					"$PMTK605*31"
+ 
 // request for updates on antenna status 
 #define PGCMD_ANTENNA					"$PGCMD,33,1*6C" 
 #define PGCMD_NOANTENNA					"$PGCMD,33,0*6D" 

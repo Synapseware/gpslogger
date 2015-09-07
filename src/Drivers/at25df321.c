@@ -46,6 +46,16 @@ uint8_t read_status_register(uint8_t chip_cs)
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
+bool is_write_enabled(uint8_t chip_cs)
+{
+	// if bit 5 is clear, no error was detected so return true
+	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_WEL) != 0)
+		return true;
+
+	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
 // returns a 1 if the device is ready for erase or program operations
 bool device_is_ready(uint8_t chip_cs)
 {
@@ -59,10 +69,10 @@ bool device_is_ready(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns 1 if the device encountered an erase or program error
-bool write_succeeded(uint8_t chip_cs)
+bool programming_error(uint8_t chip_cs)
 {
 	// if bit 5 is clear, no error was detected so return true
-	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_EPE) == 0)
+	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_EPE) != 0)
 		return true;
 
 	// return false to indicate an error
@@ -117,16 +127,19 @@ bool is_valid(uint8_t chip_cs)
 // Globally allow sector unprotection
 void global_unprotect(uint8_t chip_cs)
 {
+	// read current status
+	uint8_t status = read_status_register(chip_cs);
+
+	// clear the bits for global-unprotect
+	status &= ~(AT25DF321_SREGMSK_EPE | AT25DF321_SREGMSK_WPP | AT25DF321_SREGMSK_SWP1 | AT25DF321_SREGMSK_SWP0);
+
+	// enable writes
+	write_enable(chip_cs);
+
+	// issue global unprotect
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
-	SPI_SendByte(
-		_spi_dev,
-		(0<<7) |					// SPRL bit.  0 = unlocked (default), 1 = locked
-		(0<<5) |					// bits 5:2 must be cleared
-		(0<<4) |
-		(0<<3) |
-		(0<<2)
-	);
+	SPI_SendByte(_spi_dev, status);
 	_spi_port->OUTSET = chip_cs;
 }
 
@@ -134,6 +147,8 @@ void global_unprotect(uint8_t chip_cs)
 // Sets a sector as unprotected
 void unprotect_sector(uint8_t chip_cs, uint8_t sector)
 {
+	write_enable(chip_cs);
+
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_UNPROTECT_SECTOR);
 	SPI_SendByte(_spi_dev, sector & 0x3F);
@@ -146,6 +161,8 @@ void unprotect_sector(uint8_t chip_cs, uint8_t sector)
 // Sets a sector as unprotected
 void protect_sector(uint8_t chip_cs, uint8_t sector)
 {
+	write_enable(chip_cs);
+
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_PROTECT_SECTOR);
 	SPI_SendByte(_spi_dev, sector & 0x3F);
@@ -158,6 +175,8 @@ void protect_sector(uint8_t chip_cs, uint8_t sector)
 // helper function which performs the actual erase operation
 void erase_block(uint8_t chip_cs, uint8_t mode, uint32_t address)
 {
+	write_enable(chip_cs);
+
 	_spi_port->OUTCLR = chip_cs;
 
 	SPI_SendByte(_spi_dev, mode);
@@ -170,7 +189,7 @@ void erase_block(uint8_t chip_cs, uint8_t mode, uint32_t address)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // 
-bool erase_block_4k(uint8_t chip_cs, uint32_t address)
+void erase_block_4k(uint8_t chip_cs, uint32_t address)
 {
 	// 0x20
 	erase_block(
@@ -178,13 +197,11 @@ bool erase_block_4k(uint8_t chip_cs, uint32_t address)
 		AT25DF321_BLOCK_ERASE_4K,
 		address & AT25DF321_BLK_MASK_4K		// blank out the bottom 12 bits
 	);
-
-	return write_succeeded(chip_cs);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // 
-bool erase_block_32k(uint8_t chip_cs, uint32_t address)
+void erase_block_32k(uint8_t chip_cs, uint32_t address)
 {
 	// 0x52
 	erase_block(
@@ -192,13 +209,11 @@ bool erase_block_32k(uint8_t chip_cs, uint32_t address)
 		AT25DF321_BLOCK_ERASE_32k,
 		address & AT25DF321_BLK_MASK_32K	// blank out the bottom 15 bits
 	);
-
-	return write_succeeded(chip_cs);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // 
-bool erase_block_64k(uint8_t chip_cs, uint32_t address)
+void erase_block_64k(uint8_t chip_cs, uint32_t address)
 {
 	// 0xD8
 	erase_block(
@@ -206,21 +221,20 @@ bool erase_block_64k(uint8_t chip_cs, uint32_t address)
 		AT25DF321_BLOCK_ERASE_64k,
 		address & AT25DF321_BLK_MASK_64K	// blank out the bottom 16 bits
 	);
-
-	return write_succeeded(chip_cs);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // erases the complete chip
-bool erase_chip(uint8_t chip_cs)
+void erase_chip(uint8_t chip_cs)
 {
+	write_enable(chip_cs);
+
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_CHIP_ERASE);
 	_spi_port->OUTSET = chip_cs;
-
-	return write_succeeded(chip_cs);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 void begin_read(uint8_t chip_cs, uint32_t address)
 {
 	_spi_port->OUTCLR = chip_cs;
@@ -234,16 +248,18 @@ void begin_read(uint8_t chip_cs, uint32_t address)
 	SPI_SendByte(_spi_dev, 0);
 }
 
-void end_read(uint8_t chip_cs)
-{
-
-	_spi_port->OUTSET = chip_cs;
-}
-
+// -------------------------------------------------------------------------------------------------------------------------
 char read_byte(void)
 {
 
 	return SPI_ReceiveByte(_spi_dev);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+void end_read(uint8_t chip_cs)
+{
+
+	_spi_port->OUTSET = chip_cs;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -268,21 +284,22 @@ int read_block(uint8_t chip_cs, uint32_t address, char * pbuff, int count)
 // Sets up the flash for a write operation
 void begin_write(uint8_t chip_cs, uint32_t address)
 {
+	write_enable(chip_cs);
+
 	_spi_port->OUTCLR = chip_cs;
 
-	// issue the write enable command
-	write_enable(chip_cs);
+	address &= AT25DF321_ADDRESS_MASK;
 
 	// send the address	
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_BYTE_PAGE_PGM);
 	SPI_SendByte(_spi_dev, (address >> 16) & 0x3F);
 	SPI_SendByte(_spi_dev, (address >> 8) & 0xFF);
-	SPI_SendByte(_spi_dev, address & 0xff);
+	SPI_SendByte(_spi_dev, address & 0xFF);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// Send a byte to the flash - must have been preceeded by a begin_write call
+// Send a byte to the flash as part of a begin-write-end transaction
 void write_byte(char data)
 {
 
@@ -299,7 +316,7 @@ void end_write(uint8_t chip_cs)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
-int write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count)
+void write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count)
 {
 	begin_write(chip_cs, address);
 
@@ -310,8 +327,4 @@ int write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count
 	}
 
 	end_write(chip_cs);
-
-	bool success = write_succeeded(chip_cs);
-
-	return success;
 }

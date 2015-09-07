@@ -65,9 +65,10 @@
 #define AT25DF321_DEVICDE_ID			0x47
 
 #define AT25DF321_BLK_MASK_4K			0xFFFFF000
-#define AT25DF321_BLK_MASK_32K			0xFFFFF000
-#define AT25DF321_BLK_MASK_64K			0xFFFF0000
+#define AT25DF321_BLK_MASK_32K			0xFFFFC000
+#define AT25DF321_BLK_MASK_64K			0xFFFF8000
 
+#define AT25DF321_ADDRESS_MASK			0x3FFFFF
 //---------------------------------------------------
 
 
@@ -75,22 +76,23 @@
 /** Initializes the flash driver & IO hardware */
 void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
 
-void write_enable(uint8_t chip_cs);
+//void write_enable(uint8_t chip_cs);
 void write_disable(uint8_t chip_cs);
 void global_unprotect(uint8_t chip_cs);
 
 bool is_valid(uint8_t chip_cs);
 
+bool is_write_enabled(uint8_t chip_cs);
 bool device_is_ready(uint8_t chip_cs);
-bool write_succeeded(uint8_t chip_cs);
+bool programming_error(uint8_t chip_cs);
 
-bool erase_block_4k(uint8_t chip_cs, uint32_t address);
-bool erase_block_32k(uint8_t chip_cs, uint32_t address);
-bool erase_block_64k(uint8_t chip_cs, uint32_t address);
-bool erase_chip(uint8_t chip_cs);
+void erase_block_4k(uint8_t chip_cs, uint32_t address);
+void erase_block_32k(uint8_t chip_cs, uint32_t address);
+void erase_block_64k(uint8_t chip_cs, uint32_t address);
+void erase_chip(uint8_t chip_cs);
 
 /** Writes a block of bytes to the flash device */
-int write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
+void write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
 
 void begin_write(uint8_t chip_cs, uint32_t address);
 void write_byte(char data);
