@@ -237,7 +237,7 @@ static bool _Adafruit_GPS_Process_Latest(const char* message, int length)
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
-	DIAG_LED_port->DIRSET = DIAG_LED_pin;
+	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 
 	// capture the received data
 	char data = _usart->DATA;
@@ -245,15 +245,11 @@ ISR(USARTE0_RXC_vect)
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
 	{
-		// If we handled this message, then don't signal message receipt
-		if (!_Adafruit_GPS_Process_Latest(_data, _buffidx))
-		{
 		// Signal message receipt
 		_data[_buffidx] = 0;
 
 		if (NULL != _onMessageReady)
 			_onMessageReady(_data, _buffidx);
-		}
 	}
 	else
 	{
@@ -273,5 +269,5 @@ ISR(USARTE0_RXC_vect)
 		}
 	}
 
-	DIAG_LED_port->DIRCLR = DIAG_LED_pin;
+	DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 }

@@ -106,14 +106,6 @@ int32_t FindFirstFreeAddress(void)
 	char msg[128];
 
 	uint8_t status = device_is_ready(SPI_CS);
-
-	sprintf_P(msg, PSTR("  Page count: %lu\r\n"), FLASH_PAGE_COUNT);
-	fputs(msg, &USBSerialStream);
-	sprintf_P(msg, PSTR("  Page size: %lu\r\n"), FLASH_PAGE_SIZE);
-	fputs(msg, &USBSerialStream);
-	sprintf_P(msg, PSTR("  Total size: %lu\r\n"), FLASH_TOTAL_SIZE);
-	fputs(msg, &USBSerialStream);
-
 	if (!status)
 	{
 		sprintf_P(msg, PSTR("  Flash is not ready!\r\n"));
@@ -183,8 +175,6 @@ int32_t FindFirstFreeAddress(void)
 				count++;
 			}
 			end_read(SPI_CS);
-			sprintf_P(msg, PSTR("\r\n"));
-			fputs(msg, &USBSerialStream);
 		}
 	}
 	else
@@ -276,9 +266,6 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 	// clear the error LED
 	ERR_LED_port->OUTCLR = ERR_LED_pin;
 
-	// signal GPS message receipt
-	//DIAG_LED_port->OUTSET = DIAG_LED_pin;
-
 	// parse GPRMC - recommended minimum navigation data
 	strlcpy_P(cmd_buff, PSTR(PMTK_GPRMC_HEADER), sizeof(cmd_buff));
 	if (0 == strncmp(message, cmd_buff, 6))
@@ -306,16 +293,13 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 		// location data - save to flash!
 		if (_hasFix)
 		{
-			// reset the flash buffer
-			memset(_nmea, 0, sizeof(_nmea));
-
 			// copy the NMEA sentence to the flash buffer
-			strncpy(_nmea, message, sizeof(_nmea));
+			//strncpy(_nmea, message, sizeof(_nmea));
+			sprintf_P(_nmea, PSTR("%s\r\n"), message);
 
 			_saveNmea = true;
 		}
 
-		//DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 		return;
 	}
 
@@ -329,7 +313,6 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 			strncpy(_gpsVersion, message, sizeof(_gpsVersion));
 		}
 
-		//DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 		return;
 	}
 }
