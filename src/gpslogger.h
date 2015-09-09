@@ -48,9 +48,11 @@
 #define SPI_PORT		(&PORTC)
 #define SPI_CS			PIN4_bm
 
-
 #define USB_TIMER_MS_DELAY	100
 #define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
+
+#define GPS_INTERVAL	300
+#define GPS_TIMEOUT		90
 
 
 /* Function Prototypes: */

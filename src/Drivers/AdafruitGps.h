@@ -2,6 +2,8 @@
 #define __ADAFRUIT_GPS__
 
 
+#include "gpslogger.h"
+
 
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Misc/RingBuffer.h>
@@ -49,7 +51,7 @@
 // ask for the release and version
 // returns something like "$PMTK705,AXN_2.10_3339_2012072601,5223,PA6H,1.0*6A"
 #define PMTK_Q_RELEASE					"$PMTK605*31"
- 
+
 // request for updates on antenna status 
 #define PGCMD_ANTENNA					"$PGCMD,33,1*6C" 
 #define PGCMD_NOANTENNA					"$PGCMD,33,0*6D" 
@@ -79,7 +81,6 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin);
 void Adafruit_GPS_Enable(void);
 void Adafruit_GPS_Disable(void);
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
-int Adafruit_GPS_CloneLastMessage(char* destination, int destSize);
 void Adafruit_GPS_Suspend(void);
 void Adafruit_GPS_Wakeup(void);
 

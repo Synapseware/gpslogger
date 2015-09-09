@@ -3,17 +3,16 @@
 
 
 /** Globals */
-USART_t	*		_usart			= 0;
-PORT_t	*		_en_port		= 0;
-uint8_t			_en_pin			= 0;
-int8_t			_message_rdy	= 0;
+static USART_t *		_usart			= 0;
+static PORT_t *			_en_port		= 0;
+static uint8_t			_en_pin			= 0;
 
 /** Create the buffer structure and its underlying storage array */
-char			_data[256];
-int				_buffidx		= 0;
+static char				_data[256];
+static int				_buffidx		= 0;
 
 /* Flags for GPS state */
-static uint8_t	_gps_flags		= 0;
+static uint8_t			_gps_flags		= 0;
 
 
 /** Message ready callback function */
@@ -74,15 +73,6 @@ void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 {
 	// assign message handler
 	_onMessageReady = handler;
-}
-
-
-/** Clone's the latest message received by copying it to the given buffer */
-int Adafruit_GPS_CloneLastMessage(char* destination, int destSize)
-{
-	strncpy(destination, _data, destSize);
-	_message_rdy = 0;
-	return _buffidx;
 }
 
 
@@ -188,7 +178,7 @@ static bool Adafruit_GPS_ModuleStatus(uint8_t MASK)
 }
 
 /** Private method: Processes some of the GPS messages */
-static bool _Adafruit_GPS_Process_Latest(void)
+static bool _Adafruit_GPS_Process_Latest(const char* message, int length)
 {
 	char cmd_buff[24];
 
@@ -247,44 +237,41 @@ static bool _Adafruit_GPS_Process_Latest(void)
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
+	DIAG_LED_port->DIRSET = DIAG_LED_pin;
+
 	// capture the received data
 	char data = _usart->DATA;
-
-	// don't process any data if the message ready flag is set
-	if (_message_rdy)
-	{
-		return;
-	}
 
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
 	{
 		// If we handled this message, then don't signal message receipt
-		if (_Adafruit_GPS_Process_Latest())
-			return;
-
+		if (!_Adafruit_GPS_Process_Latest(_data, _buffidx))
+		{
 		// Signal message receipt
-		_message_rdy = 1;
 		_data[_buffidx] = 0;
 
 		if (NULL != _onMessageReady)
 			_onMessageReady(_data, _buffidx);
-
-		return;
+		}
 	}
-
-	// check for start-of-message character from the GPS
-	if ('$' == data)
+	else
 	{
-		// reset the buffer
-		memset(_data, 0, sizeof(_data));
-		_buffidx = 0;
+		// check for start-of-message character from the GPS
+		if ('$' == data)
+		{
+			// reset the buffer
+			memset(_data, 0, sizeof(_data));
+			_buffidx = 0;
+		}
+
+		// don't go past the end of the GPS data buffer
+		if (_buffidx < sizeof(_data) - 1)
+		{
+			// add the data to the buffer
+			_data[_buffidx++] = data;
+		}
 	}
 
-	// don't go past the end of the GPS data buffer
-	if (_buffidx < sizeof(_data) - 1)
-	{
-		// add the data to the buffer
-		_data[_buffidx++] = data;
-	}
+	DIAG_LED_port->DIRCLR = DIAG_LED_pin;
 }
