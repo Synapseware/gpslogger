@@ -41,14 +41,12 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 					USART_DREINTLVL_OFF_gc;
 }
 
-
 /** Enable the GPS */
 void Adafruit_GPS_Enable(void)
 {
 	// set the GPS enable pin to input (high-z)
 	_en_port->DIRCLR = _en_pin;
 }
-
 
 /** Disable the GPS */
 void Adafruit_GPS_Disable(void)
@@ -58,7 +56,6 @@ void Adafruit_GPS_Disable(void)
 	_en_port->DIRSET = _en_pin;
 }
 
-
 /** Sends a command string to the GPS device */
 static void Adafruit_GPS_SendCommand(const char* command)
 {
@@ -67,14 +64,12 @@ static void Adafruit_GPS_SendCommand(const char* command)
 	Serial_SendByte(_usart, '\n');
 }
 
-
 /** Gets called when a message from the GPS module is available */
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 {
 	// assign message handler
 	_onMessageReady = handler;
 }
-
 
 /** Suspend the GPS to save power */
 void Adafruit_GPS_Suspend(void)
@@ -237,8 +232,6 @@ static bool _Adafruit_GPS_Process_Latest(const char* message, int length)
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
-	DIAG_LED_port->OUTSET = DIAG_LED_pin;
-
 	// capture the received data
 	char data = _usart->DATA;
 
@@ -250,6 +243,8 @@ ISR(USARTE0_RXC_vect)
 
 		if (NULL != _onMessageReady)
 			_onMessageReady(_data, _buffidx);
+
+		_buffidx = 0;
 	}
 	else
 	{
@@ -268,6 +263,4 @@ ISR(USARTE0_RXC_vect)
 			_data[_buffidx++] = data;
 		}
 	}
-
-	DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 }

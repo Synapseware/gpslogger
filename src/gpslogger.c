@@ -21,30 +21,30 @@ static int			_gpsTimeout			= GPS_TIMEOUT;
  *  within a device can be differentiated from one another.
  */
 USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
+{
+	.Config =
 	{
-		.Config =
-			{
-				.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
-				.DataINEndpoint           =
-					{
-						.Address          = CDC_TX_EPADDR,
-						.Size             = CDC_TXRX_EPSIZE,
-						.Banks            = 1,
-					},
-				.DataOUTEndpoint =
-					{
-						.Address          = CDC_RX_EPADDR,
-						.Size             = CDC_TXRX_EPSIZE,
-						.Banks            = 1,
-					},
-				.NotificationEndpoint =
-					{
-						.Address          = CDC_NOTIFICATION_EPADDR,
-						.Size             = CDC_NOTIFICATION_EPSIZE,
-						.Banks            = 1,
-					},
-			},
-	};
+		.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
+		.DataINEndpoint           =
+		{
+			.Address          = CDC_TX_EPADDR,
+			.Size             = CDC_TXRX_EPSIZE,
+			.Banks            = 1,
+		},
+		.DataOUTEndpoint =
+		{
+			.Address          = CDC_RX_EPADDR,
+			.Size             = CDC_TXRX_EPSIZE,
+			.Banks            = 1,
+		},
+		.NotificationEndpoint =
+		{
+			.Address          = CDC_NOTIFICATION_EPADDR,
+			.Size             = CDC_NOTIFICATION_EPSIZE,
+			.Banks            = 1,
+		},
+	},
+};
 
 
 /** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
@@ -62,13 +62,14 @@ void Timer_Initialize(void)
 		TC0_ConfigClockSource( &TCC0, TC_CLKSEL_DIV1024_gc );
 
 		/* Set period/TOP value. */
-		TC_SetPeriod( &TCC0, F_CPU / 1024 );
+		TC_SetPeriod( &TCC0, TIMER_TCC0_PERIOD );
+		TC_SetCompareA( &TCC0, 1 );
 
 		/* Setup interrupts for Compare/Capture A */
 		TC0_SetCCAIntLevel( &TCC0, TC_CCAINTLVL_LO_gc );
 
 		/* Setup interrupts for Compare/Capture B */
-		TCC0.CCB = F_CPU / 1024 * 0.05;
+		TC_SetCompareB (&TCC0, 50 );
 		TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
 	}
 
@@ -78,14 +79,13 @@ void Timer_Initialize(void)
 		/* Select clock source */
 		TC1_ConfigClockSource( &TCC1, TC_CLKSEL_DIV256_gc );
 
-		/* F_CPU / 256 / 1250 =  */
-		TC_SetPeriod( &TCC1, F_CPU / 1250 );
+		/* F_CPU / 256 / 1250 = 100 */
+		TC_SetPeriod( &TCC1, F_CPU / 256 / 1250 );
 
 		/* Setup interrupt for compare A */
 		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_HI_gc );
 	}
 }
-
 
 /** Sends a greeting to the host if the host is connected */
 void sendGreeting(const char* message)
@@ -98,7 +98,6 @@ void sendGreeting(const char* message)
 
 	fputs(message, &USBSerialStream);
 }
-
 
 /** Finds the first free page in the dataflash chip */
 int32_t FindFirstFreeAddress(void)
@@ -259,12 +258,8 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 	if (length < 5 || NULL == message)
 	{
 		// nothing to do
-		ERR_LED_port->OUTSET = ERR_LED_pin;
 		return;
 	}
-
-	// clear the error LED
-	ERR_LED_port->OUTCLR = ERR_LED_pin;
 
 	// parse GPRMC - recommended minimum navigation data
 	strlcpy_P(cmd_buff, PSTR(PMTK_GPRMC_HEADER), sizeof(cmd_buff));
@@ -323,20 +318,13 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 int main(void)
 {
 	int delay = 3;
-	_saveNmea = false;
-	memset(_nmea, 0, sizeof(_nmea));
-	memset(_gpsVersion, 0, sizeof(_gpsVersion));
-	_gpsTimeout = GPS_TIMEOUT;
-	_gpsInterval = 0;
 
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
-	GlobalInterruptEnable();
-
-	for (;;)
+	while(true)
 	{
 		if (_saveNmea)
 		{
@@ -350,6 +338,8 @@ int main(void)
 
 		if (_secondsTick)
 		{
+			DIAG_LED_port->OUTSET = DIAG_LED_pin;
+
 			if (_hostConnected)
 			{
 				if (delay)
@@ -394,6 +384,18 @@ int main(void)
 /** Configures the board hardware and chip peripherals for the application's functionality. */
 void SetupHardware(void)
 {
+	// initialize statics
+	_secondsTick		= 0;
+	_hostConnected		= 0;
+	_flashWriteAddr		= 0;
+	_hasFix				= false;
+	_saveNmea			= false;
+	memset(_nmea, 0, sizeof(_nmea));
+	memset(_gpsVersion, 0, sizeof(_gpsVersion));
+	_gpsInterval		= 0;
+	_gpsTimeout			= GPS_TIMEOUT;
+
+
 	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
 	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
 	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
@@ -407,6 +409,11 @@ void SetupHardware(void)
 
 	/* Hardware Initialization */
 	USB_Init();
+
+	// Initialize the timer(s)
+	Timer_Initialize();
+
+	GlobalInterruptEnable();
 
 	// initialize user hardware here
 	LED_PORT->OUTCLR = LED_PIN;
@@ -434,7 +441,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_2 |
+		SPI_SPEED_FCPU_DIV_32 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING
@@ -443,23 +450,22 @@ void SetupHardware(void)
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
 	global_unprotect(SPI_CS);
-
-	// Initialize the timer(s)
-	Timer_Initialize();
 }
 
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
 	// turn on the diag LED
-	LED_PORT->OUTSET = LED_PIN;
+	//DIAG_LED_port->OUTSET = DIAG_LED_pin;
+
+	_hostConnected = 1;
 }
 
 /** Event handler for the library USB Disconnection event. */
 void EVENT_USB_Device_Disconnect(void)
 {
 	// turn off the diag LED
-	LED_PORT->OUTCLR = LED_PIN;
+	//DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 
 	_hostConnected = 0;
 }
@@ -483,14 +489,17 @@ void EVENT_USB_Device_ControlRequest(void)
 /** Event handler for the library USB Control Line State Change event */
 void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const CDCInterfaceInfo)
 {
+	return;
 	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
 	if (CurrentDTRState)
 	{
 		_hostConnected = 1;
+		DIAG_LED_port->OUTSET = DIAG_LED_pin;
 	}
 	else
 	{
 		_hostConnected = 0;
+		DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 	}
 }
 
@@ -499,7 +508,9 @@ void CDC_ProcessControlStateChange(void)
 {
 	/* Device must be connected and configured for the task to run */
 	if (USB_DeviceState != DEVICE_STATE_Configured)
-	  return;
+	{
+		return;
+	}
 
 	if (_hostConnected)
 	{
@@ -515,7 +526,9 @@ ISR(TCC0_CCA_vect)
 
 	// Turn the LED on
 	if (_hostConnected)
+	{
 		LED_PORT->OUTSET = LED_PIN;
+	}
 }
 
 /** Interrupt handler for TCC0 Compare/Capture B */
@@ -531,7 +544,7 @@ ISR(TCC1_CCA_vect)
 	/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
 	CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
-	CDC_ProcessControlStateChange();
+	//CDC_ProcessControlStateChange();
 
 	/* Required calls */
 	CDC_Device_USBTask(&VirtualSerial_CDC_Interface);

@@ -21,7 +21,7 @@ ARCH			= XMEGA
 BOARD			= USER
 F_CPU			= 32000000
 F_USB			= 48000000
-OPTIMIZATION		= s
+OPTIMIZATION	= s
 TARGET			= gpslogger
 SRC				= $(TARGET).c \
 				Descriptors.c \
