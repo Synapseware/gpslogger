@@ -10,7 +10,8 @@
 
 #define	FLASH_TOTAL_SIZE				4194304UL
 #define	FLASH_PAGE_SIZE					256UL
-#define	FLASH_PAGE_COUNT		(FLASH_TOTAL_SIZE / FLASH_PAGE_SIZE)
+#define FLASH_PAGE_MASK					255
+#define	FLASH_PAGE_COUNT				(FLASH_TOTAL_SIZE / FLASH_PAGE_SIZE)
 
 
 //---------------------------------------------------

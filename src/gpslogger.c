@@ -10,7 +10,7 @@ volatile int32_t	_flashWriteAddr		= 0;
 /** NMEA processing data & flags */
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
-static char			_nmea[256];
+static char			_nmea[260];
 static char			_gpsVersion[96];
 static int			_gpsInterval		= 0;
 static int			_gpsTimeout			= GPS_TIMEOUT;
@@ -203,6 +203,10 @@ bool SaveNMEA(void)
 		return false;
 	}
 
+	// append \r\n to the NMEA sentence
+	sprintf_P(&(_nmea[sentenceLength]), PSTR("\r\n\0"));
+	sentenceLength += 2;
+
 	fputs(_nmea, &USBSerialStream);
 	sprintf_P(msg, PSTR("\r\n"));
 	fputs(msg, &USBSerialStream);
@@ -222,23 +226,37 @@ bool SaveNMEA(void)
 	// write latest message to flash
 	int idx = 0;
 	begin_write(SPI_CS, _flashWriteAddr);
-	while (sentenceLength && _nmea[idx])
+	while (sentenceLength)
 	{
-		if (idx > 0 && (_flashWriteAddr % FLASH_PAGE_SIZE) == 0)
+		// write a byte of data to the flash
+		write_byte(_nmea[idx++]);
+		_flashWriteAddr++;
+
+		// check for page-boundary crossing
+		if ((_flashWriteAddr & FLASH_PAGE_MASK) == 0)
 		{
 			end_write(SPI_CS);
 
 			// wait for write to complete
 			while(!device_is_ready(SPI_CS));
 
-			// resume the block write
+			// set programming to next page
 			begin_write(SPI_CS, _flashWriteAddr);
 		}
 
-		write_byte(_nmea[idx++]);
-		_flashWriteAddr++;
+		// break on null-terminator (it must already be written!)
+		if ('\0' == _nmea[idx])
+			break;
+
+		// decrement counter for safe-writting
+		sentenceLength--;
 	}
+
+	// complete the write cycle
 	end_write(SPI_CS);
+
+	// wait for write to complete
+	while(!device_is_ready(SPI_CS));
 
 	_flashWriteAddr += strlen(_nmea);
 

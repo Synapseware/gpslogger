@@ -238,7 +238,7 @@ ISR(USARTE0_RXC_vect)
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
 	{
-		// Signal message receipt
+		// null-terminate the NMEA sentence
 		_data[_buffidx] = 0;
 
 		if (NULL != _onMessageReady)
