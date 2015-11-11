@@ -34,6 +34,11 @@
 #define AT25DF321_UNPROTECT_SECTOR		0x39
 #define AT25DF321_READ_SECT_PROT_REG	0x3C
 
+// Global protect/unprotect SREG values
+#define AT25DF321_SREG_GLOBAL_UNPROTECT	0x00
+#define AT25DF321_SREG_GLOBAL_PROTECT	0x7F
+
+
 // Status register commands
 #define AT25DF321_READ_STATUS			0x05
 #define AT25DF321_WRITE_STATUS			0x01
@@ -74,39 +79,44 @@
 
 
 
-/** Initializes the flash driver & IO hardware */
+// Initializes the flash driver & IO hardware
 void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
 
-//void write_enable(uint8_t chip_cs);
+// device protection methods
+void write_enable(uint8_t chip_cs);
 void write_disable(uint8_t chip_cs);
 void global_unprotect(uint8_t chip_cs);
+void global_protect(uint8_t chip_cs);
 
+// device validity checks
 bool is_valid(uint8_t chip_cs);
 
+// power saving options
 void power_down(uint8_t chip_cs);
 void resume(uint8_t chip_cs);
 
+// device status methods
 bool is_write_enabled(uint8_t chip_cs);
+bool is_write_protected(uint8_t chip_cs);
 bool device_is_ready(uint8_t chip_cs);
 bool programming_error(uint8_t chip_cs);
 
+// erase methods
 void erase_block_4k(uint8_t chip_cs, uint32_t address);
 void erase_block_32k(uint8_t chip_cs, uint32_t address);
 void erase_block_64k(uint8_t chip_cs, uint32_t address);
 void erase_chip(uint8_t chip_cs);
 
-/** Writes a block of bytes to the flash device */
-void write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
-
+// persistence methods
 void begin_write(uint8_t chip_cs, uint32_t address);
 void write_byte(char data);
 void end_write(uint8_t chip_cs);
+void write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
 
+// reading methods
 void begin_read(uint8_t chip_cs, uint32_t address);
 void end_read(uint8_t chip_cs);
 char read_byte(void);
-
-/** Reads a block of bytes from the flash device */
 int read_block(uint8_t chip_cs, uint32_t address, char* pbuff, int count);
 
 #endif

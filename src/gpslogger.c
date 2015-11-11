@@ -475,6 +475,9 @@ void SetupHardware(void)
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
 	global_unprotect(SPI_CS);
+
+	// turn on diag LED
+	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 }
 
 /** Event handler for the library USB Connection event. */

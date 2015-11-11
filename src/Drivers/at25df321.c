@@ -34,8 +34,8 @@ void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// reads the status register byte and returns it
-uint8_t read_status_register(uint8_t chip_cs)
+// returns the status register bytes
+uint16_t read_status_register(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_READ_STATUS);
@@ -46,37 +46,35 @@ uint8_t read_status_register(uint8_t chip_cs)
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
+// returns true if the WEL of the status register is set
 bool is_write_enabled(uint8_t chip_cs)
 {
-	// if bit 5 is clear, no error was detected so return true
-	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_WEL) != 0)
-		return true;
-
-	return false;
+	// checks WEL bit of the status register
+	return ((read_status_register(chip_cs) & AT25DF321_SREGMSK_WEL) != 0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// returns a 1 if the device is ready for erase or program operations
+// returns true if the WPP of the status register is set
+bool is_write_protected(uint8_t chip_cs)
+{
+	// check the WPP bit
+	return ((read_status_register(chip_cs) & AT25DF321_SREGMSK_WPP) != 0);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// returns true if the RDY/BSY bit is clear
 bool device_is_ready(uint8_t chip_cs)
 {
-	// if bit 0 is cleared then the device is ready
-	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_RDYBSY) == 0)
-		return true;
-
-	// device is not ready
-	return false;
+	// checks the RDY/BSY bit of the status register
+	return ((read_status_register(chip_cs) & AT25DF321_SREGMSK_RDYBSY) == 0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// returns 1 if the device encountered an erase or program error
+// returns true if the EPE bit of is set
 bool programming_error(uint8_t chip_cs)
 {
 	// if bit 5 is clear, no error was detected so return true
-	if ((read_status_register(chip_cs) & AT25DF321_SREGMSK_EPE) != 0)
-		return true;
-
-	// return false to indicate an error
-	return false;
+	return ((read_status_register(chip_cs) & AT25DF321_SREGMSK_EPE) != 0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -143,24 +141,32 @@ void resume(uint8_t chip_cs)
 	_spi_port->OUTSET = chip_cs;
 }
 
-// -------------------------------------------------------------------------------------------------------------------------
-// Globally allow sector unprotection
-void global_unprotect(uint8_t chip_cs)
+void _set_global_protect_state(uint8_t chip_cs, uint8_t protect)
 {
-	// read current status
-	uint8_t status = read_status_register(chip_cs);
-
-	// clear the bits for global-unprotect
-	status &= ~(AT25DF321_SREGMSK_EPE | AT25DF321_SREGMSK_WPP | AT25DF321_SREGMSK_SWP1 | AT25DF321_SREGMSK_SWP0);
-
 	// enable writes
 	write_enable(chip_cs);
 
 	// issue global unprotect
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
-	SPI_SendByte(_spi_dev, status);
+	SPI_SendByte(_spi_dev, protect);
 	_spi_port->OUTSET = chip_cs;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Globally allow sector unprotection
+void global_unprotect(uint8_t chip_cs)
+{
+	// 
+	_set_global_protect_state(chip_cs, AT25DF321_SREG_GLOBAL_UNPROTECT);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Set the global protect flags
+void global_protect(uint8_t chip_cs)
+{
+	// 
+	_set_global_protect_state(chip_cs, AT25DF321_SREG_GLOBAL_PROTECT);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
