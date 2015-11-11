@@ -83,6 +83,9 @@ void global_unprotect(uint8_t chip_cs);
 
 bool is_valid(uint8_t chip_cs);
 
+void power_down(uint8_t chip_cs);
+void resume(uint8_t chip_cs);
+
 bool is_write_enabled(uint8_t chip_cs);
 bool device_is_ready(uint8_t chip_cs);
 bool programming_error(uint8_t chip_cs);

@@ -124,6 +124,26 @@ bool is_valid(uint8_t chip_cs)
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
+// puts the device into deep-power down mode
+void power_down(uint8_t chip_cs)
+{
+	// write 06h to the chip to enable the write mode
+	_spi_port->OUTCLR = chip_cs;
+	SPI_SendByte(_spi_dev, AT25DF321_DEEP_PWRDN);
+	_spi_port->OUTSET = chip_cs;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// required to wake the device from a deep power down
+void resume(uint8_t chip_cs)
+{
+	// write 06h to the chip to enable the write mode
+	_spi_port->OUTCLR = chip_cs;
+	SPI_SendByte(_spi_dev, AT25DF321_RESUME);
+	_spi_port->OUTSET = chip_cs;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
 // Globally allow sector unprotection
 void global_unprotect(uint8_t chip_cs)
 {

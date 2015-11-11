@@ -188,7 +188,6 @@ int32_t FindFirstFreeAddress(void)
 /** Saves the latest NMEA logging data to the flash */
 bool SaveNMEA(void)
 {
-	_saveNmea = false;
 	char msg[64];
 
 	sprintf_P(msg, PSTR("Saving NMEA sentence:\r\n"));
@@ -330,6 +329,32 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 	}
 }
 
+/** Prints an initial greeting to the USB port
+*/
+void InitialGreeting(void)
+{
+	char msg[64];
+	sprintf_P(msg, PSTR("GPS Logger v1.1 - 20150801\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	if (0 != strlen(_gpsVersion))
+	{
+		sprintf_P(msg, PSTR("GPS Version: %s\r\n"), _gpsVersion);
+	}
+	else
+	{
+		sprintf_P(msg, PSTR("GPS Version: (unknown)\r\n"));
+	}
+	fputs(msg, &USBSerialStream);
+
+	sprintf_P(msg, PSTR("Flash is Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
+	fputs(msg, &USBSerialStream);
+
+	_flashWriteAddr = FindFirstFreeAddress();
+	sprintf_P(msg, PSTR("Flash start: %lu\r\n"), _flashWriteAddr);
+	fputs(msg, &USBSerialStream);
+}
+
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
@@ -338,8 +363,6 @@ int main(void)
 	int delay = 3;
 
 	SetupHardware();
-
-DIAG_LED_port->OUTSET = DIAG_LED_pin;
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
@@ -350,6 +373,8 @@ DIAG_LED_port->OUTSET = DIAG_LED_pin;
 		{
 			SaveNMEA();
 			_saveNmea = false;
+
+			// sleep after save
 		}
 
 		if (!_hostConnected)
@@ -361,35 +386,13 @@ DIAG_LED_port->OUTSET = DIAG_LED_pin;
 		{
 			if (_hostConnected)
 			{
-
-DIAG_LED_port->OUTSET = DIAG_LED_pin;
-
 				if (delay)
 				{
 					delay--;
 
 					if (!delay)
 					{
-						char msg[64];
-						sprintf_P(msg, PSTR("GPS Logger v1.1 - 20150801\r\n"));
-						fputs(msg, &USBSerialStream);
-
-						if (0 != strlen(_gpsVersion))
-						{
-							sprintf_P(msg, PSTR("GPS Version: %s\r\n"), _gpsVersion);
-						}
-						else
-						{
-							sprintf_P(msg, PSTR("GPS Version: (unknown)\r\n"));
-						}
-						fputs(msg, &USBSerialStream);
-
-						sprintf_P(msg, PSTR("Flash is Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
-						fputs(msg, &USBSerialStream);
-
-						_flashWriteAddr = FindFirstFreeAddress();
-						sprintf_P(msg, PSTR("Flash start: %lu\r\n"), _flashWriteAddr);
-						fputs(msg, &USBSerialStream);
+						InitialGreeting();
 					}
 				}
 			}
