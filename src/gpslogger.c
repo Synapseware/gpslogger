@@ -339,6 +339,8 @@ int main(void)
 
 	SetupHardware();
 
+DIAG_LED_port->OUTSET = DIAG_LED_pin;
+
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
@@ -347,6 +349,7 @@ int main(void)
 		if (_saveNmea)
 		{
 			SaveNMEA();
+			_saveNmea = false;
 		}
 
 		if (!_hostConnected)
@@ -356,10 +359,11 @@ int main(void)
 
 		if (_secondsTick)
 		{
-			DIAG_LED_port->OUTSET = DIAG_LED_pin;
-
 			if (_hostConnected)
 			{
+
+DIAG_LED_port->OUTSET = DIAG_LED_pin;
+
 				if (delay)
 				{
 					delay--;
@@ -459,7 +463,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_32 |
+		SPI_SPEED_FCPU_DIV_2 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING
@@ -507,7 +511,7 @@ void EVENT_USB_Device_ControlRequest(void)
 /** Event handler for the library USB Control Line State Change event */
 void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const CDCInterfaceInfo)
 {
-	return;
+	/*
 	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
 	if (CurrentDTRState)
 	{
@@ -519,6 +523,7 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const C
 		_hostConnected = 0;
 		DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 	}
+	*/
 }
 
 /** Process control line signals */
