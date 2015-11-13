@@ -149,6 +149,7 @@ void _set_global_protect_state(uint8_t chip_cs, uint8_t protect)
 	// issue global unprotect
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
+	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 	SPI_SendByte(_spi_dev, protect);
 	_spi_port->OUTSET = chip_cs;
 }

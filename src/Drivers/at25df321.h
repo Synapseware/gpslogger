@@ -8,6 +8,8 @@
 #include <inttypes.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
 
+#include "../gpslogger.h"
+
 #define	FLASH_TOTAL_SIZE				4194304UL
 #define	FLASH_PAGE_SIZE					256UL
 #define FLASH_PAGE_MASK					255
@@ -43,8 +45,7 @@
 #define AT25DF321_READ_STATUS			0x05
 #define AT25DF321_WRITE_STATUS			0x01
 
-// Misc
-#define AT25DF321_READ_MFG_ID			0x9F
+// Power saving
 #define AT25DF321_DEEP_PWRDN			0xB9
 #define AT25DF321_RESUME				0xAB
 
@@ -67,6 +68,8 @@
 #define AT25DF321_SREGMSK_RDYBSY_bp		0
 #define AT25DF321_SREGMSK_RDYBSY		(1<<0)
 
+// Manufacturer ID read & verify data
+#define AT25DF321_READ_MFG_ID			0x9F
 #define AT25DF321_MGF_ID				0x1F
 #define AT25DF321_DEVICDE_ID			0x47
 

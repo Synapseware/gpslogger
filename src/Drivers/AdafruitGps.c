@@ -78,7 +78,6 @@ void Adafruit_GPS_Suspend(void)
 	Adafruit_GPS_SendCommand(PSTR(PMTK_STANDBY));
 }
 
-
 /** Wakeup the GPS from a previous suspend */
 void Adafruit_GPS_Wakeup(void)
 {
@@ -127,7 +126,6 @@ void Adafruit_GPS_HotStart(void)
 	// issue the cold start command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_HOT_START));
 }
-
 
 /**  */
 void Adafruit_GPS_RMCOnly(void)
@@ -229,6 +227,19 @@ static bool _Adafruit_GPS_Process_Latest(const char* message, int length)
 	return false;
 }
 
+/** Writes a byte of data to the internal buffer */
+static void writeData(char data)
+{
+	if (_buffidx < sizeof(_data) - 1)
+	{
+		_data[_buffidx++] = data;
+	}
+	else
+	{
+		_data[_buffidx] = 0;
+	}
+}
+
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
@@ -238,8 +249,8 @@ ISR(USARTE0_RXC_vect)
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
 	{
-		// null-terminate the NMEA sentence
-		_data[_buffidx] = 0;
+		writeData(data);
+		writeData(0);
 
 		if (NULL != _onMessageReady)
 			_onMessageReady(_data, _buffidx);
@@ -260,7 +271,7 @@ ISR(USARTE0_RXC_vect)
 		if (_buffidx < sizeof(_data) - 1)
 		{
 			// add the data to the buffer
-			_data[_buffidx++] = data;
+			writeData(data);
 		}
 	}
 }
