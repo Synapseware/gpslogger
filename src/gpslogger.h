@@ -38,11 +38,14 @@
 #define GPS_EN_port		(&PORTC)
 #define GPS_EN_pin		PIN1_bm
 
-#define DIAG_LED_port	(&PORTC)
+#define DIAG_LED_port	(&PORTD)
 #define DIAG_LED_pin	PIN0_bm
 
-#define ERR_LED_port	(&PORTC)
+#define ERR_LED_port	(&PORTD)
 #define ERR_LED_pin		PIN1_bm
+
+#define INFO_LED_port	(&PORTD)
+#define INFO_LED_pin	PIN2_bm
 
 #define SPI_DEVICE		SPIC
 #define SPI_PORT		(&PORTC)
@@ -51,9 +54,7 @@
 #define USB_TIMER_MS_DELAY	100
 #define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
 
-#define TIMER_TCC0_PERIOD	(F_CPU / 1024)
-
-#define GPS_INTERVAL	300
+#define GPS_INTERVAL	120
 #define GPS_TIMEOUT		90
 
 

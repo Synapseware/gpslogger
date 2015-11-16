@@ -10,6 +10,7 @@ volatile int32_t	_flashWriteAddr		= 0;
 /** NMEA processing data & flags */
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
+static bool			_recordPosition		= true;
 static char			_nmea[256];
 static char			_gpsVersion[96];
 static int			_gpsInterval		= 0;
@@ -62,7 +63,7 @@ void Timer_Initialize(void)
 		TC0_ConfigClockSource( &TCC0, TC_CLKSEL_DIV1024_gc );
 
 		/* Set period/TOP value. */
-		TC_SetPeriod( &TCC0, TIMER_TCC0_PERIOD );
+		TC_SetPeriod( &TCC0, F_CPU / 1024 );
 		TC_SetCompareA( &TCC0, 1 );
 
 		/* Setup interrupts for Compare/Capture A */
@@ -80,10 +81,10 @@ void Timer_Initialize(void)
 		TC1_ConfigClockSource( &TCC1, TC_CLKSEL_DIV256_gc );
 
 		/* F_CPU / 256 / 1250 = 100 */
-		TC_SetPeriod( &TCC1, F_CPU / 256 / 1250 );
+		TC_SetPeriod( &TCC1, F_CPU / 256 / 5000 );
 
 		/* Setup interrupt for compare A */
-		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_HI_gc );
+		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_LO_gc );
 	}
 }
 
@@ -97,6 +98,30 @@ void sendGreeting(const char* message)
 		return;
 
 	fputs(message, &USBSerialStream);
+}
+
+/** Prints the contents of the flash */
+void dumpFlashContents(int32_t length)
+{
+	char msg[32];
+
+	if (length < 1)
+	{
+		sprintf_P(msg, PSTR("  Flash is empty!\r\n"));
+		fputs(msg, &USBSerialStream);
+		return;
+	}
+
+	sprintf_P(msg, PSTR("  Contents:\r\n"));
+	fputs(msg, &USBSerialStream);
+
+	begin_read(SPI_CS, 0);
+	for (int32_t count = 0; count < length; count++)
+	{
+		char data = read_byte();
+		fputc(data, &USBSerialStream);
+	}
+	end_read(SPI_CS);
 }
 
 /** Finds the first free page in the dataflash chip */
@@ -126,6 +151,7 @@ int32_t FindFirstFreeAddress(void)
 
 	int32_t address = 0;
 	int32_t freefrom = -1;
+	int matches = 0;
 
 	begin_read(SPI_CS, address);
 	while (address < FLASH_TOTAL_SIZE)
@@ -136,32 +162,21 @@ int32_t FindFirstFreeAddress(void)
 
 		if (0xFF == data)
 		{
+			matches++;
 			if (freefrom < 0)
 				freefrom = address - 1;
 		}
 		else
 		{
+			matches = 0;
 			freefrom = -1;
 		}
+
+		// 255 0xFF's is most likely a free page...
+		if (matches > 255)
+			break;
 	}
 	end_read(SPI_CS);
-
-	/*
-	if (freefrom > 0)
-	{
-		sprintf_P(msg, PSTR("Flash contents:\r\n"));
-		fputs(msg, &USBSerialStream);
-		begin_read(SPI_CS, 0);
-		int32_t count = 0;
-		while (count < freefrom)
-		{
-			char data = read_byte();
-			fputc(data, &USBSerialStream);
-			count++;
-		}
-		end_read(SPI_CS);
-	}
-	*/
 
 	return freefrom;
 }
@@ -176,15 +191,17 @@ bool SaveNMEA(void)
 		return false;
 	}
 
+	PMIC.CTRL = 0;
+
 	ERR_LED_port->OUTSET = ERR_LED_pin;
 
 	// write latest message to flash
 	int idx = 0;
 	begin_write(SPI_CS, _flashWriteAddr);
-	while (sentenceLength)
+	while (true)
 	{
 		// write a byte of data to the flash
-		write_byte(_nmea[idx++]);
+		write_byte(_nmea[idx]);
 		_flashWriteAddr++;
 
 		// check for page-boundary crossing
@@ -193,29 +210,30 @@ bool SaveNMEA(void)
 			end_write(SPI_CS);
 
 			// wait for write to complete
-			while(!device_is_ready(SPI_CS));
+			while(is_write_enabled(SPI_CS));
 
 			// set programming to next page
 			begin_write(SPI_CS, _flashWriteAddr);
 		}
 
-		// break on null-terminator (it must already be written!)
-		if ('\0' == _nmea[idx])
+		// break on null-terminator (it's already written!)
+		if (0 == _nmea[idx])
 			break;
 
-		// decrement counter for safe-writting
-		sentenceLength--;
+		idx++;
 	}
 
 	// complete the write cycle
 	end_write(SPI_CS);
 
 	// wait for write to complete
-	while(!device_is_ready(SPI_CS));
+	while(is_write_enabled(SPI_CS));
 
-	_flashWriteAddr += strlen(_nmea);
+	_flashWriteAddr += sentenceLength;
 
 	ERR_LED_port->OUTCLR = ERR_LED_pin;
+
+	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
 
 	return true;
 }
@@ -296,7 +314,8 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 */
 void InitialGreeting(void)
 {
-	char msg[64];
+	char msg[128];
+
 	sprintf_P(msg, PSTR("GPS Logger v1.1 - 20150801\r\n"));
 	fputs(msg, &USBSerialStream);
 
@@ -306,17 +325,41 @@ void InitialGreeting(void)
 		sprintf_P(msg, PSTR("GPS Version: (unknown)\r\n"));
 	fputs(msg, &USBSerialStream);
 
-	sprintf_P(msg, PSTR("Flash is Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
+	sprintf_P(msg, PSTR("Flash info:\r\n"));
 	fputs(msg, &USBSerialStream);
+
+	sprintf_P(msg, PSTR("  Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
+	fputs(msg, &USBSerialStream);
+
+	{
+		/*
+		ERR_LED_port->OUTSET = ERR_LED_pin;
+
+		global_unprotect(SPI_CS);
+		
+		sprintf_P(msg, PSTR("  Formatting flash...\r\n"));
+		fputs(msg, &USBSerialStream);
+		erase_chip(SPI_CS);
+		while(is_write_enabled(SPI_CS));
+		
+		sprintf_P(msg, PSTR("  Done!\r\n"));
+		fputs(msg, &USBSerialStream);
+
+		ERR_LED_port->OUTCLR = ERR_LED_pin;
+		*/
+	}
 
 	sprintf_P(msg, PSTR("  Searching for free start address...\r\n"));
 	fputs(msg, &USBSerialStream);
 
 	_flashWriteAddr = FindFirstFreeAddress();
 	if (_flashWriteAddr < 0)
-		sprintf_P(msg, PSTR(" Failed to find a free address.\r\n"));
+		sprintf_P(msg, PSTR("  Failed to find a free address.\r\n"));
 	else
-		sprintf_P(msg, PSTR(" Flash start address: %u\r\n"), _flashWriteAddr);
+		sprintf_P(msg, PSTR("  Flash start address: %u\r\n"), _flashWriteAddr);
+	fputs(msg, &USBSerialStream);
+
+	dumpFlashContents(_flashWriteAddr);
 }
 
 /** Main program entry point. This routine contains the overall program flow, including initial
@@ -336,24 +379,23 @@ int main(void)
 	{
 		if (_saveNmea)
 		{
-			sprintf_P(msg, PSTR("Suspending GPS module.\r\n"));
-			fputs(msg, &USBSerialStream);
+			fputs_P(PSTR("Suspending GPS module.\r\n"), &USBSerialStream);
 
 			Adafruit_GPS_Suspend();
+			_recordPosition = false;
 
-			sprintf_P(msg, PSTR("Saving NMEA sentence:\r\n"));
-			fputs(msg, &USBSerialStream);
+			fputs_P(PSTR("Saving NMEA sentence:\r\n"), &USBSerialStream);
 			fputs(_nmea, &USBSerialStream);
+
+			if (SaveNMEA())
+				fputs_P(PSTR("  successfully saved nmea\r\n"), &USBSerialStream);
+			else
+				fputs_P(PSTR("  failed to save!\r\n"), &USBSerialStream);
 
 			_saveNmea = false;
 
-			if (SaveNMEA())
-				sprintf_P(msg, PSTR("  successfully saved nmea\r\n"));
-			else
-				sprintf_P(msg, PSTR("  failed to save!\r\n"));
-			fputs(msg, &USBSerialStream);
-
 			// sleep after save
+			_gpsInterval = GPS_INTERVAL;
 		}
 
 		if (!_hostConnected)
@@ -363,6 +405,25 @@ int main(void)
 
 		if (_secondsTick)
 		{
+			if (_gpsInterval)
+			{
+				INFO_LED_port->OUTSET = INFO_LED_pin;
+
+				_gpsInterval--;
+			}
+			else
+			{
+				if (!_recordPosition)
+				{
+					INFO_LED_port->OUTCLR = INFO_LED_pin;
+
+					_recordPosition = true;
+					Adafruit_GPS_Wakeup();
+				}
+			}
+
+			_secondsTick = 0;
+
 			if (_hostConnected)
 			{
 				if (delay)
@@ -375,12 +436,6 @@ int main(void)
 					}
 				}
 			}
-			else
-			{
-				// handle GPS timeouts, etc
-			}
-
-			_secondsTick = 0;
 		}
 	}
 }
@@ -431,6 +486,9 @@ void SetupHardware(void)
 	ERR_LED_port->OUTCLR = ERR_LED_pin;
 	ERR_LED_port->DIRSET = ERR_LED_pin;
 
+	INFO_LED_port->OUTCLR = INFO_LED_pin;
+	INFO_LED_port->DIRSET = INFO_LED_pin;
+
 	// intialize the GPS module
 	GPS_UART_port->DIRSET = GPS_TX_pin;
 	GPS_UART_port->DIRCLR = GPS_RX_pin;
@@ -442,29 +500,22 @@ void SetupHardware(void)
 	Adafruit_GPS_RMCOnly();
 	Adafruit_GPS_AskForVersion();
 
-	// Set SPI pin directions
-	SPI_PORT->DIR |= (PIN4_bm | PIN6_bm | PIN7_bm);
-	SPI_PORT->DIR &= ~SPI_CS;
+	// reset the SPI device
+	SPI_DEVICE.CTRL = 0;
+	SPI_DEVICE.INTCTRL = 0;
+	SPI_DEVICE.STATUS = 0;
 
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_8 |
+		SPI_SPEED_FCPU_DIV_16 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING
 	);
 
-	// Make sure interrupts are disabled
-	SPI_DEVICE.INTCTRL = SPI_INTLVL_OFF_gc;
-
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
-
-//	global_unprotect(SPI_CS);
-
-	// turn on diag LED
-	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 }
 
 /** Event handler for the library USB Connection event. */
@@ -502,22 +553,22 @@ void EVENT_USB_Device_ControlRequest(void)
 }
 
 /** Event handler for the library USB Control Line State Change event */
-void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const CDCInterfaceInfo)
-{
-	/*
-	bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
-	if (CurrentDTRState)
+/*
+	void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const CDCInterfaceInfo)
 	{
-		_hostConnected = 1;
-		DIAG_LED_port->OUTSET = DIAG_LED_pin;
+		bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
+		if (CurrentDTRState)
+		{
+			_hostConnected = 1;
+			DIAG_LED_port->OUTSET = DIAG_LED_pin;
+		}
+		else
+		{
+			_hostConnected = 0;
+			DIAG_LED_port->OUTCLR = DIAG_LED_pin;
+		}
 	}
-	else
-	{
-		_hostConnected = 0;
-		DIAG_LED_port->OUTCLR = DIAG_LED_pin;
-	}
-	*/
-}
+*/
 
 /** Process control line signals */
 void CDC_ProcessControlStateChange(void)

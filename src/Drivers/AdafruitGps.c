@@ -36,7 +36,7 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
 	Serial_Init(_usart, 9600, false);
 
 	// enable specific USART interrupts
-	_usart->CTRLA = USART_RXCINTLVL_LO_gc |
+	_usart->CTRLA = USART_RXCINTLVL_HI_gc |
 					USART_TXCINTLVL_OFF_gc |
 					USART_DREINTLVL_OFF_gc;
 }
@@ -60,8 +60,7 @@ void Adafruit_GPS_Disable(void)
 static void Adafruit_GPS_SendCommand(const char* command)
 {
 	Serial_SendString_P(_usart, command);
-	Serial_SendByte(_usart, '\r');
-	Serial_SendByte(_usart, '\n');
+	Serial_SendString_P(_usart, PSTR("\r\n"));
 }
 
 /** Gets called when a message from the GPS module is available */
@@ -170,63 +169,6 @@ static bool Adafruit_GPS_ModuleStatus(uint8_t MASK)
 		: false;
 }
 
-/** Private method: Processes some of the GPS messages */
-static bool _Adafruit_GPS_Process_Latest(const char* message, int length)
-{
-	char cmd_buff[24];
-
-	// check for init
-	strlcpy_P(cmd_buff, PSTR(PGACK_INIT_COMPLETE), sizeof(cmd_buff));
-	if (0 == strncmp((const char*)_data, cmd_buff, 13))
-	{
-		_gps_flags |= ADAFRUIT_GPS_FLAGS_INIT;
-		return true;
-	}
-
-	// check for cold start
-	strlcpy_P(cmd_buff, PSTR(PGACK_COLD_STARTUP), sizeof(cmd_buff));
-	if (0 == strncmp((const char*)_data, cmd_buff, 13))
-	{
-		_gps_flags |= ADAFRUIT_GPS_FLAGS_COLD_START;
-		return true;
-	}
-
-	// check for ident
-	strlcpy_P(cmd_buff, PSTR(PGACK_CHIP_IDENT), sizeof(cmd_buff));
-	if (0 == strncmp((const char*)_data, cmd_buff, 18))
-	{
-		_gps_flags |= ADAFRUIT_GPS_FLAGS_IDENT;
-		return true;
-	}
-
-	// check for standby status
-	strlcpy_P(cmd_buff, PSTR(PMTK_STANDBY_SUCCESS), sizeof(cmd_buff));
-	if (0 == strncmp((const char*)_data, cmd_buff, 17))
-	{
-		_gps_flags |= ADAFRUIT_GPS_FLAGS_STANDBYOK;
-		return true;
-	}
-
-	// check for awake status
-	strlcpy_P(cmd_buff, PSTR(PMTK_AWAKE), sizeof(cmd_buff));
-	if (0 == strncmp((const char*)_data, cmd_buff, 15))
-	{
-		_gps_flags |= ADAFRUIT_GPS_FLAGS_AWAKE;
-		return true;
-	}
-
-	// check for config complete
-	strlcpy_P(cmd_buff, PSTR(PGACK_CONFIG_COMPLETE), sizeof(cmd_buff));
-	if (0 == strncmp((const char*)_data, cmd_buff, 15))
-	{
-		_gps_flags |= ADAFRUIT_GPS_FLAGS_READY;
-		return true;
-	}
-
-	// no intercept done
-	return false;
-}
-
 /** Writes a byte of data to the internal buffer */
 static void writeData(char data)
 {
@@ -255,6 +197,7 @@ ISR(USARTE0_RXC_vect)
 		if (NULL != _onMessageReady)
 			_onMessageReady(_data, _buffidx);
 
+		memset(_data, 0, sizeof(_data));
 		_buffidx = 0;
 	}
 	else
@@ -267,11 +210,7 @@ ISR(USARTE0_RXC_vect)
 			_buffidx = 0;
 		}
 
-		// don't go past the end of the GPS data buffer
-		if (_buffidx < sizeof(_data) - 1)
-		{
-			// add the data to the buffer
-			writeData(data);
-		}
+		// add the data to the buffer
+		writeData(data);
 	}
 }

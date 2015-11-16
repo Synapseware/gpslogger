@@ -3,21 +3,7 @@
 
 SPI_t*		_spi_dev;
 PORT_t*		_spi_port;
-uint8_t		_chip_cs;
 
-/*
-	uint8_t read_status_register(void);
-	uint8_t device_is_ready(void);
-	uint8_t write_succeeded(void);
-	void write_enable(void);
-
-	void erase_block(uint8_t mode, uint32_t address);
-	void erase_block_4k(uint32_t address);
-	int erase_block_32k(uint32_t address);
-	int erase_block_64k(uint32_t address);
-
-	void read_page(uint32_t address);
-*/
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Initializes the AT24DF321 flash driver
@@ -25,17 +11,19 @@ void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 {
 	_spi_dev	= spi;
 	_spi_port	= spi_port;
-	_chip_cs	= cs;
 
-	// enable output on the CS pin
+	// Make sure interrupts are disabled
+	_spi_dev->INTCTRL = SPI_INTLVL_OFF_gc;
+
+	// setup pins
 	_spi_port->OUTSET = cs;
 	_spi_port->DIRCLR = PIN6_bm;
-	_spi_port->DIRSET = PIN7_bm | PIN5_bm | PIN4_bm;
+	_spi_port->DIRSET = PIN4_bm | PIN5_bm | PIN7_bm;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns the status register bytes
-uint16_t read_status_register(uint8_t chip_cs)
+static uint8_t read_status_register(uint8_t chip_cs)
 {
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_READ_STATUS);
@@ -141,7 +129,7 @@ void resume(uint8_t chip_cs)
 	_spi_port->OUTSET = chip_cs;
 }
 
-void _set_global_protect_state(uint8_t chip_cs, uint8_t protect)
+static void _set_global_protect_state(uint8_t chip_cs, uint8_t protect)
 {
 	// enable writes
 	write_enable(chip_cs);
@@ -149,7 +137,6 @@ void _set_global_protect_state(uint8_t chip_cs, uint8_t protect)
 	// issue global unprotect
 	_spi_port->OUTCLR = chip_cs;
 	SPI_SendByte(_spi_dev, AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
-	DIAG_LED_port->OUTSET = DIAG_LED_pin;
 	SPI_SendByte(_spi_dev, protect);
 	_spi_port->OUTSET = chip_cs;
 }
