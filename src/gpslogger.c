@@ -81,7 +81,7 @@ void Timer_Initialize(void)
 		TC1_ConfigClockSource( &TCC1, TC_CLKSEL_DIV256_gc );
 
 		/* F_CPU / 256 / 1250 = 100 */
-		TC_SetPeriod( &TCC1, F_CPU / 256 / 5000 );
+		TC_SetPeriod( &TCC1, F_CPU / 256 / 125 );
 
 		/* Setup interrupt for compare A */
 		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_LO_gc );
@@ -158,6 +158,12 @@ int32_t FindFirstFreeAddress(void)
 	{
 		// look for the first 0xFF followed by 0xFF's to the end
 		char data = read_byte();
+		if (0 == data)
+		{
+			// null character marks end of text
+			freefrom = address;
+			break;
+		}
 		address++;
 
 		if (0xFF == data)
@@ -191,7 +197,7 @@ bool SaveNMEA(void)
 		return false;
 	}
 
-	PMIC.CTRL = 0;
+	cli();
 
 	ERR_LED_port->OUTSET = ERR_LED_pin;
 
@@ -233,7 +239,7 @@ bool SaveNMEA(void)
 
 	ERR_LED_port->OUTCLR = ERR_LED_pin;
 
-	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
+	sei();
 
 	return true;
 }
@@ -241,7 +247,7 @@ bool SaveNMEA(void)
 /** Callback function which is invoked when a complete message is received
 This method is run from the UART RX interrupt */
 void HandleLatestGpsMessage(const char* message, uint16_t length)
-{	
+{
 	char cmd_buff[16];
 
 	// don't process anything if we are saving the last message
@@ -285,12 +291,9 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 		if (_hasFix)
 		{
 			// copy the NMEA sentence to the flash buffer
-			//strncpy(_nmea, message, sizeof(_nmea));
-			sprintf_P(_nmea, PSTR("%s\r\n"), message);
+			memcpy(_nmea, message, sizeof(_nmea));
 
 			_saveNmea = true;
-
-			Adafruit_GPS_Suspend();
 		}
 
 		return;
@@ -336,12 +339,12 @@ void InitialGreeting(void)
 		ERR_LED_port->OUTSET = ERR_LED_pin;
 
 		global_unprotect(SPI_CS);
-		
+
 		sprintf_P(msg, PSTR("  Formatting flash...\r\n"));
 		fputs(msg, &USBSerialStream);
-		erase_chip(SPI_CS);
+		erase_block_4k(SPI_CS, 0);
 		while(is_write_enabled(SPI_CS));
-		
+
 		sprintf_P(msg, PSTR("  Done!\r\n"));
 		fputs(msg, &USBSerialStream);
 
@@ -508,7 +511,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_16 |
+		SPI_SPEED_FCPU_DIV_32 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING

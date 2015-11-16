@@ -38,11 +38,11 @@
 #define GPS_EN_port		(&PORTC)
 #define GPS_EN_pin		PIN1_bm
 
-#define DIAG_LED_port	(&PORTD)
-#define DIAG_LED_pin	PIN0_bm
-
 #define ERR_LED_port	(&PORTD)
-#define ERR_LED_pin		PIN1_bm
+#define ERR_LED_pin		PIN0_bm
+
+#define DIAG_LED_port	(&PORTD)
+#define DIAG_LED_pin	PIN1_bm
 
 #define INFO_LED_port	(&PORTD)
 #define INFO_LED_pin	PIN2_bm
