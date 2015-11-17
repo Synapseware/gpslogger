@@ -100,6 +100,13 @@ void sendGreeting(const char* message)
 	fputs(message, &USBSerialStream);
 }
 
+/**  */
+void formatFlash(void)
+{
+	int count = readBlock(SPI_CS, 0, _nmea, sizeof(_nmea));
+	memcmp_P(_nmea, PSTR("GpsLogger v1.1\r\n"), 18);
+}
+
 /** Prints the contents of the flash */
 void dumpFlashContents(int32_t length)
 {
@@ -203,36 +210,27 @@ bool SaveNMEA(void)
 
 	// write latest message to flash
 	int idx = 0;
+	char data;
 	begin_write(SPI_CS, _flashWriteAddr);
-	while (true)
+	while (0 != (data = _nmea[idx++]))
 	{
 		// write a byte of data to the flash
-		write_byte(_nmea[idx]);
+		write_byte(data);
 		_flashWriteAddr++;
 
 		// check for page-boundary crossing
 		if ((_flashWriteAddr & FLASH_PAGE_MASK) == 0)
 		{
 			end_write(SPI_CS);
-
-			// wait for write to complete
 			while(is_write_enabled(SPI_CS));
 
 			// set programming to next page
 			begin_write(SPI_CS, _flashWriteAddr);
 		}
-
-		// break on null-terminator (it's already written!)
-		if (0 == _nmea[idx])
-			break;
-
-		idx++;
 	}
 
 	// complete the write cycle
 	end_write(SPI_CS);
-
-	// wait for write to complete
 	while(is_write_enabled(SPI_CS));
 
 	_flashWriteAddr += sentenceLength;
