@@ -13,8 +13,8 @@ static bool			_saveNmea			= false;
 static bool			_recordPosition		= true;
 static char			_nmea[256];
 static char			_gpsVersion[96];
-static int			_gpsInterval		= 0;
-static int			_gpsTimeout			= GPS_TIMEOUT;
+static int			_recordingTimeout	= 0;
+static int			_gpsFixTimeout		= GPS_TIMEOUT;
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -311,6 +311,33 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 	}
 }
 
+/** Poweroff the GPS */
+void DisableGps(void)
+{
+	Adafruit_GPS_Suspend();
+	Adafruit_GPS_Disable();
+}
+
+/** Poweron the GPS after a poweroff */
+void EnableGps(void)
+{
+	Adafruit_GPS_Enable();
+	Adafruit_GPS_Wakeup();
+	Adafruit_GPS_Update1Hz();
+	Adafruit_GPS_RMCOnly();
+}
+
+/** System startup init */
+void InitializeGps(void)
+{
+	Adafruit_GPS_OnMessageReceived(&HandleLatestGpsMessage);
+	Adafruit_GPS_Enable();
+	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
+	Adafruit_GPS_Update1Hz();
+	Adafruit_GPS_RMCOnly();
+	Adafruit_GPS_AskForVersion();
+}
+
 /** Prints an initial greeting to the USB port
 */
 void InitialGreeting(void)
@@ -376,65 +403,84 @@ int main(void)
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
+	// Begin main loop
 	while(true)
 	{
 		if (_saveNmea)
 		{
+			// shutoff the GPS
 			fputs_P(PSTR("Suspending GPS module.\r\n"), &USBSerialStream);
-
-			Adafruit_GPS_Suspend();
-			_recordPosition = false;
+			DisableGps();
 
 			fputs_P(PSTR("Saving NMEA sentence:\r\n"), &USBSerialStream);
-			fputs(_nmea, &USBSerialStream);
-
 			if (SaveNMEA())
 				fputs_P(PSTR("  successfully saved nmea\r\n"), &USBSerialStream);
 			else
 				fputs_P(PSTR("  failed to save!\r\n"), &USBSerialStream);
 
 			_saveNmea = false;
-
-			// sleep after save
-			_gpsInterval = GPS_INTERVAL;
+			_gpsFixTimeout = 0;
 		}
 
+		// reset the host-connected delay
 		if (!_hostConnected)
 		{
 			delay = 3;
 		}
 
-		if (_secondsTick)
+		// only main-loop code below this point
+		if (!_secondsTick)
 		{
-			if (_gpsInterval)
-			{
-				INFO_LED_port->OUTSET = INFO_LED_pin;
+			continue;
+		}
+		_secondsTick = 0;
 
-				_gpsInterval--;
-			}
-			else
+
+		// 
+		// GPS recording timeout handling state processing
+		// 
+		if (_recordingTimeout)
+		{
+			// decrement the recording timeout
+			_recordingTimeout--;
+
+			// if the recording timeout is live, check the fix timeout
+			if (_gpsFixTimeout)
 			{
-				if (!_recordPosition)
+				_gpsFixTimeout--;
+
+				// when the fix timeout is reached, suspend the GPS module
+				if (!_gpsFixTimeout)
 				{
-					INFO_LED_port->OUTCLR = INFO_LED_pin;
+					// GPS fix timeout reached - suspend the module
+					DisableGps();
 
-					_recordPosition = true;
-					Adafruit_GPS_Wakeup();
+					// turn on the fix error status LED
+					ERR_LED_port->OUTSET = ERR_LED_pin;
 				}
 			}
+		}
+		else
+		{
+			// recording timeout is 0 - wakeup the GPS module
+			_recordingTimeout = GPS_INTERVAL;
+			_gpsFixTimeout = GPS_TIMEOUT;
+			EnableGps();
 
-			_secondsTick = 0;
+			// turn off the fix error status LED
+			ERR_LED_port->OUTCLR = ERR_LED_pin;
+		}
 
-			if (_hostConnected)
+
+		// send greeting if we've hit our host-timeout and the host is connected
+		if (_hostConnected)
+		{
+			if (delay)
 			{
-				if (delay)
+				delay--;
+				if (!delay)
 				{
-					delay--;
-
-					if (!delay)
-					{
-						InitialGreeting();
-					}
+					InitialGreeting();
 				}
 			}
 		}
@@ -452,8 +498,7 @@ void SetupHardware(void)
 	_saveNmea			= false;
 	memset(_nmea, 0, sizeof(_nmea));
 	memset(_gpsVersion, 0, sizeof(_gpsVersion));
-	_gpsInterval		= 0;
-	_gpsTimeout			= GPS_TIMEOUT;
+	_recordingTimeout	= 0;
 
 
 	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
@@ -494,12 +539,8 @@ void SetupHardware(void)
 	GPS_UART_port->DIRSET = GPS_TX_pin;
 	GPS_UART_port->DIRCLR = GPS_RX_pin;
 
-	Adafruit_GPS_OnMessageReceived(&HandleLatestGpsMessage);
-	Adafruit_GPS_Enable();
-	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
-	Adafruit_GPS_Update1Hz();
-	Adafruit_GPS_RMCOnly();
-	Adafruit_GPS_AskForVersion();
+	// Prepare GPS module
+	InitializeGps();
 
 	// reset the SPI device
 	SPI_DEVICE.CTRL = 0;
