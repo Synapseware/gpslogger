@@ -420,6 +420,8 @@ int main(void)
 
 			_saveNmea = false;
 			_gpsFixTimeout = 0;
+
+			EnterPowerSave();
 		}
 
 		// reset the host-connected delay
@@ -525,7 +527,7 @@ void SetupHardware(void)
 
 	// TODO: Handle proper timeout between GPS fix timeout and logging timeout
 	RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
-	RTC_SetIntLevels( RTC_OVFINTLVL_LO_gc, RTC_COMPINTLVL_OFF_gc );
+	RTC_SetIntLevels( RTC_OVFINTLVL_OFF_gc, RTC_COMPINTLVL_OFF_gc );
 
 	/* Enable lov, med and high level interrupts in the PMIC */
 	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
