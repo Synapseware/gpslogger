@@ -500,6 +500,14 @@ void SetupHardware(void)
 	memset(_gpsVersion, 0, sizeof(_gpsVersion));
 	_recordingTimeout	= 0;
 
+	/* Powerdown unused/uneeded modules to save power */
+	power_all_disable();
+	power_usb_enable();
+	power_rtc_enable();
+	power_usarte0_enable();
+	power_spic_enable();
+	power_tc0c_enable();
+	power_tc1c_enable();
 
 	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
 	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
@@ -508,6 +516,16 @@ void SetupHardware(void)
 	/* Start the 32MHz internal RC oscillator and start the DFLL to increase it to 48MHz using the USB SOF as a reference */
 	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
 	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
+
+	/* Configure RTC to use internal clock */
+	OSC.CTRL |= OSC_RC32KEN_bm;
+	while((OSC.STATUS & OSC_RC32KRDY_bm) == 0);
+	CLK.RTCCTRL = CLK_RTCSRC_RCOSC_gc | CLK_RTCEN_bm;
+	while (RTC_Busy());
+
+	// TODO: Handle proper timeout between GPS fix timeout and logging timeout
+	RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
+	RTC_SetIntLevels( RTC_OVFINTLVL_LO_gc, RTC_COMPINTLVL_OFF_gc );
 
 	/* Enable lov, med and high level interrupts in the PMIC */
 	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
@@ -658,4 +676,10 @@ ISR(TCC1_CCA_vect)
 	/* Required calls */
 	CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 	USB_USBTask();
+}
+
+/** RTC Overflow.  Just sleep */
+ISR(RTC_OVF_vect)
+{
+	// TODO: 
 }
