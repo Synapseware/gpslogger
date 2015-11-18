@@ -29,6 +29,7 @@ SRC				= $(TARGET).c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				Drivers/at25df321.c \
+				Drivers/rtc_driver.c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL) \

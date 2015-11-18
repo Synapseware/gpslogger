@@ -413,6 +413,8 @@ int main(void)
 			DisableGps();
 
 			fputs_P(PSTR("Saving NMEA sentence:\r\n"), &USBSerialStream);
+			fputs(_nmea, &USBSerialStream);
+
 			if (SaveNMEA())
 				fputs_P(PSTR("  successfully saved nmea\r\n"), &USBSerialStream);
 			else
@@ -421,7 +423,9 @@ int main(void)
 			_saveNmea = false;
 			_gpsFixTimeout = 0;
 
-			EnterPowerSave();
+			fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
+
+			//EnterPowerSave();
 		}
 
 		// reset the host-connected delay
@@ -459,11 +463,16 @@ int main(void)
 
 					// turn on the fix error status LED
 					ERR_LED_port->OUTSET = ERR_LED_pin;
+
+					fputs_P(PSTR("GPS failed to get a fix within the timeout period.\r\n"), &USBSerialStream);
+					fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
 				}
 			}
 		}
 		else
 		{
+			fputs_P(PSTR("Enabling GPS.\r\n"), &USBSerialStream);
+
 			// recording timeout is 0 - wakeup the GPS module
 			_recordingTimeout = GPS_INTERVAL;
 			_gpsFixTimeout = GPS_TIMEOUT;
@@ -504,6 +513,7 @@ void SetupHardware(void)
 
 	/* Powerdown unused/uneeded modules to save power */
 	power_all_disable();
+	power_adca_enable();
 	power_usb_enable();
 	power_rtc_enable();
 	power_usarte0_enable();
@@ -520,14 +530,14 @@ void SetupHardware(void)
 	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
 
 	/* Configure RTC to use internal clock */
-	OSC.CTRL |= OSC_RC32KEN_bm;
-	while((OSC.STATUS & OSC_RC32KRDY_bm) == 0);
-	CLK.RTCCTRL = CLK_RTCSRC_RCOSC_gc | CLK_RTCEN_bm;
-	while (RTC_Busy());
+	//OSC.CTRL |= OSC_RC32KEN_bm;
+	//while((OSC.STATUS & OSC_RC32KRDY_bm) == 0);
+	//CLK.RTCCTRL = CLK_RTCSRC_RCOSC_gc | CLK_RTCEN_bm;
+	//while (RTC_Busy());
 
 	// TODO: Handle proper timeout between GPS fix timeout and logging timeout
-	RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
-	RTC_SetIntLevels( RTC_OVFINTLVL_OFF_gc, RTC_COMPINTLVL_OFF_gc );
+	//RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
+	//RTC_SetIntLevels( RTC_OVFINTLVL_OFF_gc, RTC_COMPINTLVL_OFF_gc );
 
 	/* Enable lov, med and high level interrupts in the PMIC */
 	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;

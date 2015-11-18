@@ -81,7 +81,8 @@ void Adafruit_GPS_Suspend(void)
 void Adafruit_GPS_Wakeup(void)
 {
 	// issue the PMTK awake command
-	Adafruit_GPS_SendCommand(PSTR(PMTK_AWAKE));
+	//Adafruit_GPS_SendCommand(PSTR(PMTK_AWAKE));
+	Serial_SendString_P(_usart, PSTR("\r\n"));
 }
 
 /**  */
