@@ -161,29 +161,28 @@ int32_t FindFirstFreeAddress(void)
 	int matches = 0;
 
 	begin_read(SPI_CS, address);
-	while (address < FLASH_TOTAL_SIZE)
+	while (address < FLASH_TOTAL_SIZE && address > -1)
 	{
 		// look for the first 0xFF followed by 0xFF's to the end
-		char data = read_byte();
-		if (0 == data)
-		{
-			// null character marks end of text
-			freefrom = address;
-			break;
-		}
-		address++;
+		int data = read_byte();
 
 		if (0xFF == data)
 		{
 			matches++;
 			if (freefrom < 0)
-				freefrom = address - 1;
+				freefrom = address;
+		}
+		else if (-1 == data)
+		{
+			break;
 		}
 		else
 		{
 			matches = 0;
 			freefrom = -1;
 		}
+
+		address++;
 
 		// 255 0xFF's is most likely a free page...
 		if (matches > 255)
@@ -261,6 +260,8 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 		return;
 	}
 
+	// GPS NMEA data: http://www.gpsinformation.org/dale/nmea.htm
+
 	// parse GPRMC - recommended minimum navigation data
 	strlcpy_P(cmd_buff, PSTR(PMTK_GPRMC_HEADER), sizeof(cmd_buff));
 	if (0 == strncmp(message, cmd_buff, 6))
@@ -314,6 +315,7 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 /** Poweroff the GPS */
 void DisableGps(void)
 {
+	Adafruit_GPS_OutputOff();
 	Adafruit_GPS_Suspend();
 	Adafruit_GPS_Disable();
 }
@@ -623,24 +625,6 @@ void EVENT_USB_Device_ControlRequest(void)
 	// pass the config data to the processor
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
-
-/** Event handler for the library USB Control Line State Change event */
-/*
-	void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const CDCInterfaceInfo)
-	{
-		bool CurrentDTRState = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR);
-		if (CurrentDTRState)
-		{
-			_hostConnected = 1;
-			DIAG_LED_port->OUTSET = DIAG_LED_pin;
-		}
-		else
-		{
-			_hostConnected = 0;
-			DIAG_LED_port->OUTCLR = DIAG_LED_pin;
-		}
-	}
-*/
 
 /** Process control line signals */
 void CDC_ProcessControlStateChange(void)
