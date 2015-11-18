@@ -365,15 +365,15 @@ void InitialGreeting(void)
 
 		global_unprotect(SPI_CS);
 
-		sprintf_P(msg, PSTR("  Formatting flash...\r\n"));
-		fputs(msg, &USBSerialStream);
+		fputs_P(PSTR("  Formatting flash...\r\n"), &USBSerialStream);
 		erase_block_4k(SPI_CS, 0);
 		while(is_write_enabled(SPI_CS));
 
-		sprintf_P(msg, PSTR("  Done!\r\n"));
-		fputs(msg, &USBSerialStream);
+		fputs_P(PSTR("  Done!\r\n"), &USBSerialStream);
 
 		ERR_LED_port->OUTCLR = ERR_LED_pin;
+
+		while(1);
 		*/
 	}
 
