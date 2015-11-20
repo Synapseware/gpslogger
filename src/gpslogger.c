@@ -164,17 +164,13 @@ int32_t FindFirstFreeAddress(void)
 	while (address < FLASH_TOTAL_SIZE && address > -1)
 	{
 		// look for the first 0xFF followed by 0xFF's to the end
-		int data = read_byte();
+		char data = read_byte();
 
 		if (0xFF == data)
 		{
 			matches++;
 			if (freefrom < 0)
 				freefrom = address;
-		}
-		else if (-1 == data)
-		{
-			break;
 		}
 		else
 		{
@@ -197,7 +193,7 @@ int32_t FindFirstFreeAddress(void)
 bool SaveNMEA(void)
 {
 	// make sure our string is NULL terminated
-	size_t sentenceLength = strlen(_nmea);
+	int sentenceLength = strlen(_nmea);
 	if (_flashWriteAddr < 0 || sentenceLength >= sizeof(_nmea))
 	{
 		return false;
@@ -231,8 +227,6 @@ bool SaveNMEA(void)
 	// complete the write cycle
 	end_write(SPI_CS);
 	while(is_write_enabled(SPI_CS));
-
-	_flashWriteAddr += sentenceLength;
 
 	ERR_LED_port->OUTCLR = ERR_LED_pin;
 
@@ -315,7 +309,6 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 /** Poweroff the GPS */
 void DisableGps(void)
 {
-	Adafruit_GPS_OutputOff();
 	Adafruit_GPS_Suspend();
 	Adafruit_GPS_Disable();
 }
@@ -355,8 +348,7 @@ void InitialGreeting(void)
 		sprintf_P(msg, PSTR("GPS Version: (unknown)\r\n"));
 	fputs(msg, &USBSerialStream);
 
-	sprintf_P(msg, PSTR("Flash info:\r\n"));
-	fputs(msg, &USBSerialStream);
+	fputs_P(PSTR("Flash info:\r\n"), &USBSerialStream);
 
 	sprintf_P(msg, PSTR("  Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
 	fputs(msg, &USBSerialStream);
@@ -374,13 +366,13 @@ void InitialGreeting(void)
 		fputs_P(PSTR("  Done!\r\n"), &USBSerialStream);
 
 		ERR_LED_port->OUTCLR = ERR_LED_pin;
+		INFO_LED_port->OUTSET = INFO_LED_pin;
 
 		while(1);
 		*/
 	}
 
-	sprintf_P(msg, PSTR("  Searching for free start address...\r\n"));
-	fputs(msg, &USBSerialStream);
+	fputs_P(PSTR("  Searching for free start address...\r\n"), &USBSerialStream);
 
 	_flashWriteAddr = FindFirstFreeAddress();
 	if (_flashWriteAddr < 0)
@@ -420,12 +412,10 @@ int main(void)
 			if (SaveNMEA())
 				fputs_P(PSTR("  successfully saved nmea\r\n"), &USBSerialStream);
 			else
-				fputs_P(PSTR("  failed to save!\r\n"), &USBSerialStream);
+				fputs_P(PSTR("  failed to save\r\n"), &USBSerialStream);
 
 			_saveNmea = false;
 			_gpsFixTimeout = 0;
-
-			fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
 
 			//EnterPowerSave();
 		}
@@ -470,6 +460,12 @@ int main(void)
 					fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
 				}
 			}
+			
+			if (!_recordingTimeout)
+			{
+				// turn on the diag LED to indicate normal suspend
+				DIAG_LED_port->OUTSET = DIAG_LED_pin;
+			}
 		}
 		else
 		{
@@ -482,6 +478,7 @@ int main(void)
 
 			// turn off the fix error status LED
 			ERR_LED_port->OUTCLR = ERR_LED_pin;
+			DIAG_LED_port->OUTCLR = DIAG_LED_pin;
 		}
 
 
@@ -582,7 +579,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_32 |
+		SPI_SPEED_FCPU_DIV_8 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING
