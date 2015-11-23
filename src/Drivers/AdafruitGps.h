@@ -15,9 +15,9 @@
 #define PMTK_SET_NMEA_UPDATE_5HZ		"$PMTK220,200*2C"
 #define PMTK_SET_NMEA_UPDATE_10HZ		"$PMTK220,100*2F"
 
-#define PMTK_CMD_COLD_START				"$PMTK103*30"
+#define PMTK_CMD_HOT_START				"$PMTK101*32"
 #define PMTK_CMD_WARM_START				"$PMTK102*31"
-#define PMTK_CMD_HOT_START				"$PMTK102*32"
+#define PMTK_CMD_COLD_START				"$PMTK103*30"
 
 #define PMTK_SET_BAUD_57600				"$PMTK251,57600*2C"
 #define PMTK_SET_BAUD_9600				"$PMTK251,9600*17"
@@ -46,11 +46,11 @@
 #define PMTK_STANDBY					"$PMTK161,0*28"
 #define PMTK_STANDBY_SUCCESS			"$PMTK001,161,3*36"
 #define PMTK_AWAKE						"$PMTK010,002*2D"
-#define PMTK_VERSION_HEADER				"$PMTK705,"
 
 // ask for the release and version
 // returns something like "$PMTK705,AXN_2.10_3339_2012072601,5223,PA6H,1.0*6A"
 #define PMTK_Q_RELEASE					"$PMTK605*31"
+#define PMTK_VERSION_HEADER				"$PMTK705,"
 
 // request for updates on antenna status 
 #define PGCMD_ANTENNA					"$PGCMD,33,1*6C" 
@@ -77,11 +77,12 @@
 
 typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, uint16_t);
 
-void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin);
+void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bool* char_received);
 void Adafruit_GPS_Enable(void);
 void Adafruit_GPS_Disable(void);
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
 void Adafruit_GPS_Suspend(void);
+void Adafruit_GPS_WaitForMessage(const char* msg);
 void Adafruit_GPS_Wakeup(void);
 
 static bool Adafruit_GPS_ModuleStatus(uint8_t MASK);

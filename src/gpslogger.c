@@ -8,6 +8,7 @@ volatile int32_t	_flashWriteAddr		= 0;
 
 
 /** NMEA processing data & flags */
+static bool			_waitForGpsData		= false;
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
 static bool			_recordPosition		= true;
@@ -15,6 +16,7 @@ static char			_nmea[256];
 static char			_gpsVersion[96];
 static int			_recordingTimeout	= 0;
 static int			_gpsFixTimeout		= GPS_TIMEOUT;
+static uint8_t		_allowedMisses		= GPS_FIX_MISSES;
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -55,7 +57,7 @@ static FILE USBSerialStream;
 
 
 /** Configure timers */
-void Timer_Initialize(void)
+static void Timer_Initialize(void)
 {
 	// Configure TC0 for 1 second interrupt
 	{
@@ -84,12 +86,25 @@ void Timer_Initialize(void)
 		TC_SetPeriod( &TCC1, F_CPU / 256 / 125 );
 
 		/* Setup interrupt for compare A */
-		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_LO_gc );
+		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_MED_gc );
 	}
 }
 
+/** Configure the ADC to read the GPS backup battery voltage */
+static void Adc_Initialize(void)
+{
+
+}
+
+/** Blocks the caller until a character is received from the GPS */
+static void waitForCharFromGps(void)
+{
+	_waitForGpsData = false;
+	while (!_waitForGpsData);
+}
+
 /** Sends a greeting to the host if the host is connected */
-void sendGreeting(const char* message)
+static void sendGreeting(const char* message)
 {
 	if (NULL == message)
 		return;
@@ -101,60 +116,59 @@ void sendGreeting(const char* message)
 }
 
 /**  */
-void formatFlash(void)
+static void formatFlash(void)
 {
-	int count = readBlock(SPI_CS, 0, _nmea, sizeof(_nmea));
+	int count = read_block(SPI_CS, 0, _nmea, sizeof(_nmea));
 	memcmp_P(_nmea, PSTR("GpsLogger v1.1\r\n"), 18);
 }
 
 /** Prints the contents of the flash */
-void dumpFlashContents(int32_t length)
+static void dumpFlashContents(int32_t length)
 {
-	char msg[32];
+	char msg[256];
 
+	//length = 2048;
 	if (length < 1)
 	{
-		sprintf_P(msg, PSTR("  Flash is empty!\r\n"));
-		fputs(msg, &USBSerialStream);
+		fputs_P(PSTR("  Flash is empty!\r\n"), &USBSerialStream);
 		return;
 	}
 
-	sprintf_P(msg, PSTR("  Contents:\r\n"));
-	fputs(msg, &USBSerialStream);
+	fputs(PSTR("  Contents:\r\n"), &USBSerialStream);
 
+	int32_t count = 0;
+	int pos = 0;
 	begin_read(SPI_CS, 0);
-	for (int32_t count = 0; count < length; count++)
+	while(count++ < length)
 	{
 		char data = read_byte();
-		fputc(data, &USBSerialStream);
+
+		msg[pos++] = data;
+		if (pos < sizeof(msg) - 1)
+			continue;
+
+		msg[pos] = 0;
+		pos = 0;
+
+		fputs(msg, &USBSerialStream);
+		CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 	}
 	end_read(SPI_CS);
+
+	fputs(msg, &USBSerialStream);
+	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+
+	fputs_P(PSTR("\r\n"), &USBSerialStream);
 }
 
 /** Finds the first free page in the dataflash chip */
-int32_t FindFirstFreeAddress(void)
+static int32_t FindFirstFreeAddress(void)
 {
 	uint8_t status = device_is_ready(SPI_CS);
 	if (!status)
 	{
 		return -1;
 	}
-
-	/*
-	sprintf_P(msg, PSTR("  Formatting flash\r\n"));
-	fputs(msg, &USBSerialStream);
-
-	erase_chip(SPI_CS);
-
-	sprintf_P(msg, PSTR("  Waiting for format to complete\r\n"));
-	fputs(msg, &USBSerialStream);
-
-	// wait for RDY/BSY to clear
-	while (!device_is_ready(SPI_CS));
-
-	sprintf_P(msg, PSTR("  Formatted\r\n"));
-	fputs(msg, &USBSerialStream);
-	*/
 
 	int32_t address = 0;
 	int32_t freefrom = -1;
@@ -190,7 +204,7 @@ int32_t FindFirstFreeAddress(void)
 }
 
 /** Saves the latest NMEA logging data to the flash */
-bool SaveNMEA(void)
+static bool SaveNMEA(void)
 {
 	// make sure our string is NULL terminated
 	int sentenceLength = strlen(_nmea);
@@ -199,7 +213,16 @@ bool SaveNMEA(void)
 		return false;
 	}
 
+	// make sure sentence starts with a valid character
+	if ('$' != _nmea[0])
+	{
+		fputs_P(PSTR("NMEA sentence is invalid\r\n"), &USBSerialStream);
+		return false;
+	}
+
 	cli();
+
+	global_unprotect(SPI_CS);
 
 	ERR_LED_port->OUTSET = ERR_LED_pin;
 
@@ -248,11 +271,12 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 	}
 
 	// make sure we have a valid sentence
-	if (length < 5 || NULL == message)
+	if (length < 5 || NULL == message || '$' != message[0])
 	{
 		// nothing to do
 		return;
 	}
+
 
 	// GPS NMEA data: http://www.gpsinformation.org/dale/nmea.htm
 
@@ -307,35 +331,48 @@ void HandleLatestGpsMessage(const char* message, uint16_t length)
 }
 
 /** Poweroff the GPS */
-void DisableGps(void)
+static void DisableGps(void)
 {
 	Adafruit_GPS_Suspend();
 	Adafruit_GPS_Disable();
 }
 
 /** Poweron the GPS after a poweroff */
-void EnableGps(void)
+static void EnableGps(void)
 {
 	Adafruit_GPS_Enable();
 	Adafruit_GPS_Wakeup();
+
+	//fputs_P(PSTR("Wait for GPS config complete\r\n"), &USBSerialStream);
+	//Adafruit_GPS_WaitForMessage(PSTR(PGACK_CONFIG_COMPLETE));
+
+	//fputs_P(PSTR("Wait for GPS awake\r\n"), &USBSerialStream);
+	//Adafruit_GPS_WaitForMessage(PSTR(PMTK_AWAKE));
+
+	Adafruit_GPS_HotStart();
 	Adafruit_GPS_Update1Hz();
 	Adafruit_GPS_RMCOnly();
+
+	fputs_P(PSTR("GPS enable complete\r\n"), &USBSerialStream);
 }
 
 /** System startup init */
-void InitializeGps(void)
+static void InitializeGps(void)
 {
+	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
 	Adafruit_GPS_OnMessageReceived(&HandleLatestGpsMessage);
-	Adafruit_GPS_Enable();
-	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin);
-	Adafruit_GPS_Update1Hz();
-	Adafruit_GPS_RMCOnly();
+
+	EnableGps();
+
+	fputs_P(PSTR("Wait for GPS version\r\n"), &USBSerialStream);
 	Adafruit_GPS_AskForVersion();
+	Adafruit_GPS_WaitForMessage(PSTR(PMTK_VERSION_HEADER));
+	fputs_P(PSTR("GPS Initialized.\r\n"), &USBSerialStream);
 }
 
 /** Prints an initial greeting to the USB port
 */
-void InitialGreeting(void)
+static void InitialGreeting(void)
 {
 	char msg[128];
 
@@ -384,6 +421,78 @@ void InitialGreeting(void)
 	dumpFlashContents(_flashWriteAddr);
 }
 
+/** Print GPS messages to console */
+void LogGpsMessages(const char* message, int length)
+{
+	fputs_P(PSTR("< "), &USBSerialStream);
+	fputs(message, &USBSerialStream);
+	//if (!(message[length-2] == '\r' && message[length-1] == '\n'))
+	//	fputs_P(PSTR("\r\n"), &USBSerialStream);
+	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+}
+
+/**  */
+static void GpsMenu(void)
+{
+	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
+	Adafruit_GPS_OnMessageReceived(&LogGpsMessages);
+
+	fputs_P(PSTR("GPS Interactive Menu\r\n"), &USBSerialStream);
+	fputs_P(PSTR("H - Hot start GPS\r\n"), &USBSerialStream);
+	fputs_P(PSTR("S - Susend\r\n"), &USBSerialStream);
+	fputs_P(PSTR("W - Wakeup\r\n"), &USBSerialStream);
+	fputs_P(PSTR("1 - Set update to 1Hz\r\n"), &USBSerialStream);	
+	fputs_P(PSTR("V - Ask for version\r\n"), &USBSerialStream);
+	fputs_P(PSTR("O - Output off\r\n"), &USBSerialStream);
+	fputs_P(PSTR("R - GPRMC logging only\r\n"), &USBSerialStream);
+	fputs_P(PSTR("X - Exit\r\n"), &USBSerialStream);
+	//fputs_P(PSTR("\r\n"), &USBSerialStream);
+	//fputs_P(PSTR("\r\n"), &USBSerialStream);
+	fputs_P(PSTR("\r\n"), &USBSerialStream);
+
+	while (1)
+	{
+		int usb = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+		if (usb < 0)
+			continue;
+
+		switch (usb | 0x40)
+		{
+			case 'h':
+				fputs_P(PSTR("> $PMTK101*32 (hot start)\r\n"), &USBSerialStream);
+				Adafruit_GPS_HotStart();
+				break;
+			case 's':
+				fputs_P(PSTR("> $PMTK161,0*28 (suspending)\r\n"), &USBSerialStream);
+				Adafruit_GPS_Suspend();
+				break;
+			case 'w':
+				fputs_P(PSTR("> ' ' (wakeup)\r\n"), &USBSerialStream);
+				Adafruit_GPS_Wakeup();
+				break;
+			case '1':
+				fputs_P(PSTR("> $PMTK220,100*2F (1Hz output)\r\n"), &USBSerialStream);
+				Adafruit_GPS_Update1Hz();
+				break;
+			case 'v':
+				fputs_P(PSTR("> $PMTK605*31 (version query)\r\n"), &USBSerialStream);
+				Adafruit_GPS_AskForVersion();
+				break;
+			case 'o':
+				fputs_P(PSTR("> $PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (output off)\r\n"), &USBSerialStream);
+				Adafruit_GPS_OutputOff();
+				break;
+			case 'r':
+				fputs_P(PSTR("> $PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29 (GPRMC only)\r\n"), &USBSerialStream);
+				Adafruit_GPS_RMCOnly();
+				break;
+			case 'x':
+				fputs_P(PSTR("Exit GPS menu!\r\n"), &USBSerialStream);
+				return;
+		}
+	}
+}
+
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
@@ -409,13 +518,26 @@ int main(void)
 			fputs_P(PSTR("Saving NMEA sentence:\r\n"), &USBSerialStream);
 			fputs(_nmea, &USBSerialStream);
 
+			sprintf_P(msg, PSTR("  address before: %u\r\n"), _flashWriteAddr);
+			fputs(msg, &USBSerialStream);
+
 			if (SaveNMEA())
+			{
 				fputs_P(PSTR("  successfully saved nmea\r\n"), &USBSerialStream);
+
+				sprintf_P(msg, PSTR("  address after: %u\r\n"), _flashWriteAddr);
+				fputs(msg, &USBSerialStream);
+			}
 			else
 				fputs_P(PSTR("  failed to save\r\n"), &USBSerialStream);
 
 			_saveNmea = false;
 			_gpsFixTimeout = 0;
+			_allowedMisses = 0;
+
+			uint32_t latestAddress = FindFirstFreeAddress();
+			sprintf_P(msg, PSTR("  next free address: %u\r\n"), latestAddress);
+			fputs(msg, &USBSerialStream);
 
 			//EnterPowerSave();
 		}
@@ -450,14 +572,23 @@ int main(void)
 				// when the fix timeout is reached, suspend the GPS module
 				if (!_gpsFixTimeout)
 				{
-					// GPS fix timeout reached - suspend the module
-					DisableGps();
+					if (_allowedMisses)
+					{
+						sprintf_P(msg, PSTR("Skipping fix timeout %i\r\n"), _allowedMisses);
+						fputs(msg, &USBSerialStream);
+						_allowedMisses--;
+					}
+					else
+					{
+						// GPS fix timeout reached - suspend the module
+						DisableGps();
 
-					// turn on the fix error status LED
-					ERR_LED_port->OUTSET = ERR_LED_pin;
+						// turn on the fix error status LED
+						ERR_LED_port->OUTSET = ERR_LED_pin;
 
-					fputs_P(PSTR("GPS failed to get a fix within the timeout period.\r\n"), &USBSerialStream);
-					fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
+						fputs_P(PSTR("GPS failed to get a fix within the timeout period.\r\n"), &USBSerialStream);
+						fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
+					}
 				}
 			}
 			
@@ -467,13 +598,14 @@ int main(void)
 				DIAG_LED_port->OUTSET = DIAG_LED_pin;
 			}
 		}
-		else
+		else if (!_allowedMisses)
 		{
 			fputs_P(PSTR("Enabling GPS.\r\n"), &USBSerialStream);
 
 			// recording timeout is 0 - wakeup the GPS module
 			_recordingTimeout = GPS_INTERVAL;
 			_gpsFixTimeout = GPS_TIMEOUT;
+			_allowedMisses = GPS_FIX_MISSES;
 			EnableGps();
 
 			// turn off the fix error status LED
@@ -490,6 +622,10 @@ int main(void)
 				delay--;
 				if (!delay)
 				{
+					GpsMenu();
+
+					InitializeGps();
+
 					InitialGreeting();
 				}
 			}
@@ -506,11 +642,13 @@ void SetupHardware(void)
 	_flashWriteAddr		= 0;
 	_hasFix				= false;
 	_saveNmea			= false;
+	_allowedMisses		= GPS_FIX_MISSES;
 	memset(_nmea, 0, sizeof(_nmea));
 	memset(_gpsVersion, 0, sizeof(_gpsVersion));
 	_recordingTimeout	= 0;
 
 	/* Powerdown unused/uneeded modules to save power */
+	/*
 	power_all_disable();
 	power_adca_enable();
 	power_usb_enable();
@@ -519,6 +657,7 @@ void SetupHardware(void)
 	power_spic_enable();
 	power_tc0c_enable();
 	power_tc1c_enable();
+	*/
 
 	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
 	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
@@ -564,12 +703,13 @@ void SetupHardware(void)
 	INFO_LED_port->OUTCLR = INFO_LED_pin;
 	INFO_LED_port->DIRSET = INFO_LED_pin;
 
-	// intialize the GPS module
+	// intialize the GPS IO pins
 	GPS_UART_port->DIRSET = GPS_TX_pin;
+	GPS_UART_port->OUTSET = GPS_TX_pin;
 	GPS_UART_port->DIRCLR = GPS_RX_pin;
 
 	// Prepare GPS module
-	InitializeGps();
+	//InitializeGps();
 
 	// reset the SPI device
 	SPI_DEVICE.CTRL = 0;
@@ -579,7 +719,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_8 |
+		SPI_SPEED_FCPU_DIV_32 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING
@@ -658,11 +798,11 @@ ISR(TCC0_CCB_vect)
 	LED_PORT->OUTCLR = LED_PIN;
 }
 
-/** Interrupt handler for TCC0 Compare/Capture A */
+/** Interrupt handler for TCC1 Compare/Capture A */
 ISR(TCC1_CCA_vect)
 {
 	/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
-	CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+	//CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
 	//CDC_ProcessControlStateChange();
 
@@ -674,5 +814,6 @@ ISR(TCC1_CCA_vect)
 /** RTC Overflow.  Just sleep */
 ISR(RTC_OVF_vect)
 {
+
 	// TODO: 
 }

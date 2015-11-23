@@ -56,9 +56,9 @@
 #define USB_TIMER_MS_DELAY	100
 #define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
 
-#define GPS_INTERVAL	60
-#define GPS_TIMEOUT		45
-
+#define GPS_INTERVAL	120
+#define GPS_TIMEOUT		60
+#define GPS_FIX_MISSES	5
 
 /* Function Prototypes: */
 void SetupHardware(void);

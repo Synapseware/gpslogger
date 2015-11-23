@@ -13,19 +13,20 @@ static int				_buffidx		= 0;
 
 /* Flags for GPS state */
 static uint8_t			_gps_flags		= 0;
-
+static bool				_char_in		= false;
 
 /** Message ready callback function */
 Adafruit_GPS_OnMessageReceived_t _onMessageReady = NULL;
 
 
 /** Initialize the Adafruit GPS library */
-void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin)
+void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bool* char_received)
 {
 	_usart		= usart;
 	_en_port	= en_port;
 	_en_pin		= en_pin;
 	_gps_flags	= 0;
+	_char_in	= char_received;
 
 	// Initialize the USART ring buffer with the created storage array
 	//RingBuffer_InitBuffer(&Buffer, _data, sizeof(_data));
@@ -70,6 +71,34 @@ void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 	_onMessageReady = handler;
 }
 
+/** Gets called when a message is received */
+static bool _messageReceived = false;
+static char* _messageToWaitFor = NULL;
+void Adafruit_GPS_WaitForMessageCallback(const char* message, uint16_t length)
+{
+	_messageReceived = false;
+
+	// check for receipt of message of interest
+	if (0 == strcmp_P(message, _messageToWaitFor))
+	{
+		_messageReceived = true;
+	}
+}
+
+/** Waits for specific message from the GPS before returning */
+void Adafruit_GPS_WaitForMessage(const char* msg)
+{
+	_messageToWaitFor = msg;
+	Adafruit_GPS_OnMessageReceived_t handler = _onMessageReady;
+	_onMessageReady = Adafruit_GPS_WaitForMessageCallback;
+	
+	// wait for message
+	while(!_messageReceived);
+
+	// restore message handler
+	_onMessageReady = handler;
+}
+
 /** Suspend the GPS to save power */
 void Adafruit_GPS_Suspend(void)
 {
@@ -80,9 +109,8 @@ void Adafruit_GPS_Suspend(void)
 /** Wakeup the GPS from a previous suspend */
 void Adafruit_GPS_Wakeup(void)
 {
-	// issue the PMTK awake command
-	//Adafruit_GPS_SendCommand(PSTR(PMTK_AWAKE));
-	Serial_SendString_P(_usart, PSTR("\r\n"));
+	// wakeup the device by sending a single character
+	Serial_SendString_P(_usart, PSTR(" "));
 }
 
 /**  */
@@ -158,7 +186,7 @@ void Adafruit_GPS_OutputOff(void)
 /**  */
 void Adafruit_GPS_AskForVersion(void)
 {
-
+	// Send the version 
 	Adafruit_GPS_SendCommand(PSTR(PMTK_Q_RELEASE));
 }
 
@@ -188,6 +216,8 @@ ISR(USARTE0_RXC_vect)
 {
 	// capture the received data
 	char data = _usart->DATA;
+
+	_char_in = true;
 
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
