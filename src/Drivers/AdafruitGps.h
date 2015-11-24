@@ -8,10 +8,11 @@
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Misc/RingBuffer.h>
 
-
+typedef uint8_t flags_t;
 
 // different commands to set the update rate from once a second (1 Hz) to 10 times a second (10Hz)
 #define PMTK_SET_NMEA_UPDATE_1HZ		"$PMTK220,1000*1F"
+#define PMTK_SET_NMEA_UPDATE_1HZ_OK		"$PMTK001,220,3*30"
 #define PMTK_SET_NMEA_UPDATE_5HZ		"$PMTK220,200*2C"
 #define PMTK_SET_NMEA_UPDATE_10HZ		"$PMTK220,100*2F"
 
@@ -30,6 +31,9 @@
 #define PMTK_SET_NMEA_OUTPUT_ALLDATA	"$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
 // turn off output
 #define PMTK_SET_NMEA_OUTPUT_OFF		"$PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
+
+// response to output changes
+#define PMTK_SET_NMEA_OUTPUT_OK			"$PMTK001,314,3*36"
 
 // to generate your own sentences, check out the MTK command datasheet and use a checksum calculator
 // such as the awesome http://www.hhhh.org/wiml/proj/nmeaxor.html
@@ -67,25 +71,27 @@
 #define PGACK_CHIP_IDENT				"$PMTK011,MTKGPS*08"
 #define PGACK_CONFIG_COMPLETE			"$PMTK010,001*2E"
 
-#define ADAFRUIT_GPS_FLAGS_INIT			(1<<0)
-#define ADAFRUIT_GPS_FLAGS_COLD_START	(1<<1)
+#define ADAFRUIT_GPS_FLAGS_COMPLETE		(1<<0)
+#define ADAFRUIT_GPS_FLAGS_START		(1<<1)
 #define ADAFRUIT_GPS_FLAGS_IDENT		(1<<2)
 #define ADAFRUIT_GPS_FLAGS_AWAKE		(1<<3)
-#define ADAFRUIT_GPS_FLAGS_READY		(1<<4)
+//#define ADAFRUIT_GPS_FLAGS_			(1<<4)
 #define ADAFRUIT_GPS_FLAGS_STANDBYOK	(1<<5)
+#define ADAFRUTI_GPS_FLAGS_VERSION		(1<<6)
+#define ADAFRUIT_GPS_FLAGS_OUTPUT_CHG	(1<<7)
 
 
-typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, uint16_t);
+typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, int);
 
 void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bool* char_received);
+void Adafruit_GPS_ResetState(void);
+flags_t Adafruit_GPS_CurrentState(void);
 void Adafruit_GPS_Enable(void);
 void Adafruit_GPS_Disable(void);
 void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
 void Adafruit_GPS_Suspend(void);
 void Adafruit_GPS_WaitForMessage(const char* msg);
 void Adafruit_GPS_Wakeup(void);
-
-static bool Adafruit_GPS_ModuleStatus(uint8_t MASK);
 
 void Adafruit_GPS_Update1Hz(void);
 void Adafruit_GPS_Update5Hz(void);

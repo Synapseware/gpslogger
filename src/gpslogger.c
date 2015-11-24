@@ -11,7 +11,6 @@ volatile int32_t	_flashWriteAddr		= 0;
 static bool			_waitForGpsData		= false;
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
-static bool			_recordPosition		= true;
 static char			_nmea[256];
 static char			_gpsVersion[96];
 static int			_recordingTimeout	= 0;
@@ -90,37 +89,12 @@ static void Timer_Initialize(void)
 	}
 }
 
-/** Configure the ADC to read the GPS backup battery voltage */
+/** Configure the ADC to read the GPS backup battery voltage
 static void Adc_Initialize(void)
 {
 
 }
-
-/** Blocks the caller until a character is received from the GPS */
-static void waitForCharFromGps(void)
-{
-	_waitForGpsData = false;
-	while (!_waitForGpsData);
-}
-
-/** Sends a greeting to the host if the host is connected */
-static void sendGreeting(const char* message)
-{
-	if (NULL == message)
-		return;
-
-	if (!_hostConnected)
-		return;
-
-	fputs(message, &USBSerialStream);
-}
-
-/**  */
-static void formatFlash(void)
-{
-	int count = read_block(SPI_CS, 0, _nmea, sizeof(_nmea));
-	memcmp_P(_nmea, PSTR("GpsLogger v1.1\r\n"), 18);
-}
+ */
 
 /** Prints the contents of the flash */
 static void dumpFlashContents(int32_t length)
@@ -260,7 +234,7 @@ static bool SaveNMEA(void)
 
 /** Callback function which is invoked when a complete message is received
 This method is run from the UART RX interrupt */
-void HandleLatestGpsMessage(const char* message, uint16_t length)
+void HandleLatestGpsMessage(const char* message, int length)
 {
 	char cmd_buff[16];
 
@@ -342,18 +316,9 @@ static void EnableGps(void)
 {
 	Adafruit_GPS_Enable();
 	Adafruit_GPS_Wakeup();
-
-	//fputs_P(PSTR("Wait for GPS config complete\r\n"), &USBSerialStream);
-	//Adafruit_GPS_WaitForMessage(PSTR(PGACK_CONFIG_COMPLETE));
-
-	//fputs_P(PSTR("Wait for GPS awake\r\n"), &USBSerialStream);
-	//Adafruit_GPS_WaitForMessage(PSTR(PMTK_AWAKE));
-
 	Adafruit_GPS_HotStart();
 	Adafruit_GPS_Update1Hz();
 	Adafruit_GPS_RMCOnly();
-
-	fputs_P(PSTR("GPS enable complete\r\n"), &USBSerialStream);
 }
 
 /** System startup init */
@@ -364,10 +329,7 @@ static void InitializeGps(void)
 
 	EnableGps();
 
-	fputs_P(PSTR("Wait for GPS version\r\n"), &USBSerialStream);
 	Adafruit_GPS_AskForVersion();
-	Adafruit_GPS_WaitForMessage(PSTR(PMTK_VERSION_HEADER));
-	fputs_P(PSTR("GPS Initialized.\r\n"), &USBSerialStream);
 }
 
 /** Prints an initial greeting to the USB port
@@ -424,6 +386,9 @@ static void InitialGreeting(void)
 /** Print GPS messages to console */
 void LogGpsMessages(const char* message, int length)
 {
+	if (length < 2 || NULL == message)
+		return;
+
 	fputs_P(PSTR("< "), &USBSerialStream);
 	fputs(message, &USBSerialStream);
 	//if (!(message[length-2] == '\r' && message[length-1] == '\n'))
@@ -432,16 +397,16 @@ void LogGpsMessages(const char* message, int length)
 }
 
 /**  */
-static void GpsMenu(void)
+void GpsMenu(void)
 {
 	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
 	Adafruit_GPS_OnMessageReceived(&LogGpsMessages);
 
 	fputs_P(PSTR("GPS Interactive Menu\r\n"), &USBSerialStream);
 	fputs_P(PSTR("H - Hot start GPS\r\n"), &USBSerialStream);
-	fputs_P(PSTR("S - Susend\r\n"), &USBSerialStream);
+	fputs_P(PSTR("S - Suspend\r\n"), &USBSerialStream);
 	fputs_P(PSTR("W - Wakeup\r\n"), &USBSerialStream);
-	fputs_P(PSTR("1 - Set update to 1Hz\r\n"), &USBSerialStream);	
+	fputs_P(PSTR("U - Set update to 1Hz\r\n"), &USBSerialStream);	
 	fputs_P(PSTR("V - Ask for version\r\n"), &USBSerialStream);
 	fputs_P(PSTR("O - Output off\r\n"), &USBSerialStream);
 	fputs_P(PSTR("R - GPRMC logging only\r\n"), &USBSerialStream);
@@ -470,7 +435,7 @@ static void GpsMenu(void)
 				fputs_P(PSTR("> ' ' (wakeup)\r\n"), &USBSerialStream);
 				Adafruit_GPS_Wakeup();
 				break;
-			case '1':
+			case 'u':
 				fputs_P(PSTR("> $PMTK220,100*2F (1Hz output)\r\n"), &USBSerialStream);
 				Adafruit_GPS_Update1Hz();
 				break;
@@ -490,6 +455,34 @@ static void GpsMenu(void)
 				fputs_P(PSTR("Exit GPS menu!\r\n"), &USBSerialStream);
 				return;
 		}
+	}
+}
+
+/**  */
+void Debug_GpsState(void)
+{
+	static flags_t previousState = 0;
+	char msg[128];
+
+	flags_t state = Adafruit_GPS_CurrentState();
+	if (previousState != state)
+	{
+		fputs_P(PSTR("-- GPS State Information -----------------------------------------\r\n"), &USBSerialStream);
+		fputs_P(PSTR("Complete  Start     Ident     Awake     Standby   Version   Output\r\n"), &USBSerialStream);
+		sprintf_P(msg, PSTR("%3c%10c%10c%10c%10c%10c%10c\r\n\r\n"), 
+			(state &= ADAFRUIT_GPS_FLAGS_COMPLETE) != 0 ? '1' : '0',
+			(state &= ADAFRUIT_GPS_FLAGS_START) != 0 ? '1' : '0',
+			(state &= ADAFRUIT_GPS_FLAGS_IDENT) != 0 ? '1' : '0',
+			(state &= ADAFRUIT_GPS_FLAGS_AWAKE) != 0 ? '1' : '0',
+			(state &= ADAFRUIT_GPS_FLAGS_STANDBYOK) != 0 ? '1' : '0',
+			(state &= ADAFRUTI_GPS_FLAGS_VERSION) != 0 ? '1' : '0',
+			(state &= ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) != 0 ? '1' : '0'
+		);
+		fputs(msg, &USBSerialStream);
+		CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+
+		// last
+		previousState = state;
 	}
 }
 
@@ -617,13 +610,13 @@ int main(void)
 		// send greeting if we've hit our host-timeout and the host is connected
 		if (_hostConnected)
 		{
+			Debug_GpsState();
 			if (delay)
 			{
 				delay--;
 				if (!delay)
 				{
-					GpsMenu();
-
+					//GpsMenu();
 					InitializeGps();
 
 					InitialGreeting();
@@ -709,7 +702,7 @@ void SetupHardware(void)
 	GPS_UART_port->DIRCLR = GPS_RX_pin;
 
 	// Prepare GPS module
-	//InitializeGps();
+	InitializeGps();
 
 	// reset the SPI device
 	SPI_DEVICE.CTRL = 0;
