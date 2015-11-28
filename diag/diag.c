@@ -18,22 +18,26 @@ void setupUsart(void)
 	UCSRA &= ~(1 << U2X);
 	#endif
 
-	UCSRA = 0xFF;
+	UCSRA = 0xFF;			// Clear all flags
 
-	UCSRB = (1<<RXCIE)	|
-			(0<<TXCIE)	|
-			(0<<UDRIE)	|
-			(1<<RXEN)	|
-			(1<<TXEN)	|
-			(0<<UCSZ2);
+	UCSRB = (1<<RXCIE)	|	// RX Receive Interrupt
+			(0<<TXCIE)	|	// 
+			(0<<UDRIE)	|	// 
+			(1<<RXEN)	|	// RX Enable
+			(1<<TXEN)	|	// TX Enable
+			(0<<UCSZ2);		// 8bit words
 
-	UCSRC = (0<<UMSEL)	|
-			(0<<UPM1)	|
-			(0<<UPM0)	|
-			(0<<USBS)	|
-			(1<<UCSZ1)	|
-			(1<<UCSZ0)	|
-			(0<<UCPOL);
+	UCSRC = (0<<UMSEL)	|	// Async operation
+			(0<<UPM1)	|	// No parity
+			(0<<UPM0)	|	// No parity
+			(0<<USBS)	|	// 1 stop bit
+			(1<<UCSZ1)	|	// 8bit words
+			(1<<UCSZ0)	|	// 8bit words
+			(0<<UCPOL);		// 
+
+	// Setup IO pins for serial communication
+	DDRD &= ~(1<<PD0);
+	DDRD |= (1<<PD1);
 }
 
 /** Setup the 16bit timer1 for 1s intervals */
@@ -82,6 +86,9 @@ void setup(void)
 
 	DDRD |= (1<<PD6);
 
+	PORTB = 0xFF;
+	_delay_ms(300);
+
 	setupUsart();
 	setupTimer1();
 
@@ -93,12 +100,10 @@ int main(void)
 {
 	setup();
 
-	PORTB = 0xFF;
-	_delay_ms(300);
-
 	while(1)
 	{
-		PORTB = data;
+		//PORTB = data;
+		PORTB = 0xFF;
 	}
 
 	return 0;
@@ -107,17 +112,20 @@ int main(void)
 /** Timer1 - Compare A interrupt handler */
 ISR(TIMER1_COMPA_vect)
 {
+	// turn the LED on
 	PORTD |= (1<<PD6);
 }
 
 /** Timer1 - Compare B interrupt handler */
 ISR(TIMER1_COMPB_vect)
 {
+	// turn the LED off
 	PORTD &= ~(1<<PD6);
 }
 
 /* Character received from USART */
 ISR(USART_RX_vect)
 {
+	// read the data
 	data = UDR;
 }
