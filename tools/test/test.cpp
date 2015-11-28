@@ -30,14 +30,10 @@ static int			_flashWriteAddr		= 0;
 FILE * _flashIn = NULL;
 
 
-void showHelp(void)
-{
-
-}
-
 
 void begin_write(char cs, int address)
 {
+
 	cout << "BEGIN WRITE to " << address << endl;
 }
 
@@ -346,6 +342,51 @@ void generateNmeaFile(void)
 }
 
 
+void staticVariableTest(void)
+{
+	static int foo = 0;
+	int bar = 0;
+
+	char msg[256];
+
+	bar += 3;
+	foo += 3;
+
+	sprintf(msg, "foo: %-8i  bar: %-8i", foo, bar);
+
+	cout << msg << endl;
+}
+void runStaticVariableTest(void)
+{
+	for (int i = 0; i < 25; i++)
+	{
+		staticVariableTest();
+	}
+}
+
+
+void teststrcmp(void)
+{
+	char s1[16];
+	char s2[16];
+
+	sprintf(s1, "cats");
+	sprintf(s2, "cats");
+	cout << "s1 == s2? " << strcmp(s1, s2) << endl;
+
+	sprintf(s1, "s1");
+	sprintf(s2, "s2");
+	cout << "s1 == s2? " << strcmp(s1, s2) << endl;
+
+	s1[0] = 0;
+	cout << "s1 == s2? " << strcmp(s1, s2) << endl;
+
+	s2[0] = 0;
+	cout << "s1 == s2? " << strcmp(s1, s2) << endl;
+
+}
+
+
 /** main */
 int main(int argc, char* argv[])
 {
@@ -378,6 +419,18 @@ int main(int argc, char* argv[])
 	if (0 == strncmp("firstfree", method, 9))
 	{
 		findFirstFree();
+		return 0;
+	}
+
+	if (0 == strncmp("static", method, 5))
+	{
+		runStaticVariableTest();
+		return 0;
+	}
+
+	if (0 == strncmp("strcmp", method, 6))
+	{
+		teststrcmp();
 		return 0;
 	}
 
