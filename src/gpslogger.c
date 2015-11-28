@@ -313,23 +313,40 @@ static void DisableGps(void)
 
 /** Poweron the GPS after a poweroff */
 static void EnableGps(void)
-{
+{	
+	INFO_LED_port->OUTSET = INFO_LED_pin;
 	Adafruit_GPS_Enable();
 	Adafruit_GPS_Wakeup();
+
+	Adafruit_GPS_ResetState();
 	Adafruit_GPS_HotStart();
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_COMPLETE) == 0);
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_START) == 0);
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_AWAKE) == 0);
+
+	Adafruit_GPS_ResetState();
 	Adafruit_GPS_Update1Hz();
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_1HZ_OK) == 0);
+
+	Adafruit_GPS_ResetState();
 	Adafruit_GPS_RMCOnly();
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) == 0);
+	INFO_LED_port->OUTCLR = INFO_LED_pin;
 }
 
 /** System startup init */
 static void InitializeGps(void)
 {
-	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
+	Adafruit_GPS_Init(GPS_UART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
 	Adafruit_GPS_OnMessageReceived(&HandleLatestGpsMessage);
 
 	EnableGps();
 
+	INFO_LED_port->OUTSET = INFO_LED_pin;
+	Adafruit_GPS_ResetState();
 	Adafruit_GPS_AskForVersion();
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_VERSION) == 0);
+	INFO_LED_port->OUTCLR = INFO_LED_pin;
 }
 
 /** Prints an initial greeting to the USB port
@@ -399,8 +416,9 @@ void LogGpsMessages(const char* message, int length)
 /**  */
 void GpsMenu(void)
 {
-	Adafruit_GPS_Init(GPS_USART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
+	Adafruit_GPS_Init(GPS_UART, GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
 	Adafruit_GPS_OnMessageReceived(&LogGpsMessages);
+	Adafruit_GPS_Suspend();
 
 	fputs_P(PSTR("GPS Interactive Menu\r\n"), &USBSerialStream);
 	fputs_P(PSTR("H - Hot start GPS\r\n"), &USBSerialStream);
@@ -409,11 +427,13 @@ void GpsMenu(void)
 	fputs_P(PSTR("U - Set update to 1Hz\r\n"), &USBSerialStream);	
 	fputs_P(PSTR("V - Ask for version\r\n"), &USBSerialStream);
 	fputs_P(PSTR("O - Output off\r\n"), &USBSerialStream);
-	fputs_P(PSTR("R - GPRMC logging only\r\n"), &USBSerialStream);
+	fputs_P(PSTR("M - Minimum (GPRMC) logging only\r\n"), &USBSerialStream);
+	fputs_P(PSTR("R - Reset state\r\n"), &USBSerialStream);
 	fputs_P(PSTR("X - Exit\r\n"), &USBSerialStream);
 	//fputs_P(PSTR("\r\n"), &USBSerialStream);
 	//fputs_P(PSTR("\r\n"), &USBSerialStream);
 	fputs_P(PSTR("\r\n"), &USBSerialStream);
+	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 
 	while (1)
 	{
@@ -447,42 +467,18 @@ void GpsMenu(void)
 				fputs_P(PSTR("> $PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (output off)\r\n"), &USBSerialStream);
 				Adafruit_GPS_OutputOff();
 				break;
-			case 'r':
+			case 'm':
 				fputs_P(PSTR("> $PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29 (GPRMC only)\r\n"), &USBSerialStream);
 				Adafruit_GPS_RMCOnly();
+				break;
+			case 'r':
+				fputs_P(PSTR("Resetting GPS\r\n"), &USBSerialStream);
+				Adafruit_GPS_ResetState();
 				break;
 			case 'x':
 				fputs_P(PSTR("Exit GPS menu!\r\n"), &USBSerialStream);
 				return;
 		}
-	}
-}
-
-/**  */
-void Debug_GpsState(void)
-{
-	static flags_t previousState = 0;
-	char msg[128];
-
-	flags_t state = Adafruit_GPS_CurrentState();
-	if (previousState != state)
-	{
-		fputs_P(PSTR("-- GPS State Information -----------------------------------------\r\n"), &USBSerialStream);
-		fputs_P(PSTR("Complete  Start     Ident     Awake     Standby   Version   Output\r\n"), &USBSerialStream);
-		sprintf_P(msg, PSTR("%3c%10c%10c%10c%10c%10c%10c\r\n\r\n"), 
-			(state &= ADAFRUIT_GPS_FLAGS_COMPLETE) != 0 ? '1' : '0',
-			(state &= ADAFRUIT_GPS_FLAGS_START) != 0 ? '1' : '0',
-			(state &= ADAFRUIT_GPS_FLAGS_IDENT) != 0 ? '1' : '0',
-			(state &= ADAFRUIT_GPS_FLAGS_AWAKE) != 0 ? '1' : '0',
-			(state &= ADAFRUIT_GPS_FLAGS_STANDBYOK) != 0 ? '1' : '0',
-			(state &= ADAFRUTI_GPS_FLAGS_VERSION) != 0 ? '1' : '0',
-			(state &= ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) != 0 ? '1' : '0'
-		);
-		fputs(msg, &USBSerialStream);
-		CDC_Device_Flush(&VirtualSerial_CDC_Interface);
-
-		// last
-		previousState = state;
 	}
 }
 
@@ -610,15 +606,11 @@ int main(void)
 		// send greeting if we've hit our host-timeout and the host is connected
 		if (_hostConnected)
 		{
-			Debug_GpsState();
 			if (delay)
 			{
 				delay--;
 				if (!delay)
 				{
-					//GpsMenu();
-					InitializeGps();
-
 					InitialGreeting();
 				}
 			}
@@ -629,6 +621,27 @@ int main(void)
 /** Configures the board hardware and chip peripherals for the application's functionality. */
 void SetupHardware(void)
 {
+	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
+	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
+	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
+
+	/* Start the 32MHz internal RC oscillator and start the DFLL to increase it to 48MHz using the USB SOF as a reference */
+	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
+	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
+
+	/* Configure RTC to use internal clock */
+	//OSC.CTRL |= OSC_RC32KEN_bm;
+	//while((OSC.STATUS & OSC_RC32KRDY_bm) == 0);
+	//CLK.RTCCTRL = CLK_RTCSRC_RCOSC_gc | CLK_RTCEN_bm;
+	//while (RTC_Busy());
+
+	// TODO: Handle proper timeout between GPS fix timeout and logging timeout
+	//RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
+	//RTC_SetIntLevels( RTC_OVFINTLVL_OFF_gc, RTC_COMPINTLVL_OFF_gc );
+
+	/* Enable lov, med and high level interrupts in the PMIC */
+	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
+
 	// initialize statics
 	_secondsTick		= 0;
 	_hostConnected		= 0;
@@ -651,27 +664,6 @@ void SetupHardware(void)
 	power_tc0c_enable();
 	power_tc1c_enable();
 	*/
-
-	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
-	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
-	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
-
-	/* Start the 32MHz internal RC oscillator and start the DFLL to increase it to 48MHz using the USB SOF as a reference */
-	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
-	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
-
-	/* Configure RTC to use internal clock */
-	//OSC.CTRL |= OSC_RC32KEN_bm;
-	//while((OSC.STATUS & OSC_RC32KRDY_bm) == 0);
-	//CLK.RTCCTRL = CLK_RTCSRC_RCOSC_gc | CLK_RTCEN_bm;
-	//while (RTC_Busy());
-
-	// TODO: Handle proper timeout between GPS fix timeout and logging timeout
-	//RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
-	//RTC_SetIntLevels( RTC_OVFINTLVL_OFF_gc, RTC_COMPINTLVL_OFF_gc );
-
-	/* Enable lov, med and high level interrupts in the PMIC */
-	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
 
 	/* Hardware Initialization */
 	USB_Init();

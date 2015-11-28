@@ -6,9 +6,44 @@
 
 
 #include <LUFA/Drivers/Peripheral/Serial.h>
-#include <LUFA/Drivers/Misc/RingBuffer.h>
+//#include <LUFA/Drivers/Misc/RingBuffer.h>
 
-typedef uint8_t flags_t;
+
+/*
+Typical GPS conversation:
+	> board to GPS
+	< GPS to board
+
+> ' ' (wakeup)
+	< $PMTK010,001*2E		(PGACK_CONFIG_COMPLETE)
+	< $PMTK010,002*2D		(PMTK_AWAKE)
+
+> $PMTK101*32 (hot start)
+	< $PGACK,103*40			(PGACK_COLD_STARTUP)
+	< $PGACK,105*46			(PGACK_INIT_COMPLETE)
+	< $PMTK011,MTKGPS*08	(PGACK_CHIP_IDENT)
+	< $PMTK010,001*2E		(PGACK_CONFIG_COMPLETE)
+	< $PMTK010,002*2D		(PMTK_AWAKE)
+
+> $PMTK605*31 (version query)
+	< $PMTK705,AXN_2.10_3339_2012072601,5223,PA6H,1.0*6A
+
+> $PMTK220,100*2F (1Hz output)
+	< $PMTK001,220,3*30		(PMTK_SET_NMEA_UPDATE_1HZ_OK)
+
+> $PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29 (GPRMC only)
+	< $PMTK001,314,3*36		(PMTK_SET_NMEA_OUTPUT_OK)
+	< $GPRMC,045851.000,A,4803.0705,N,12249.8647,W,1.27,21.97,281115,,,A*4A
+	< $GPRMC,045852.000,A,4803.0706,N,12249.8646,W,1.29,22.26,281115,,,A*4C
+
+> $PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (output off)
+	< $PMTK001,314,3*36		(PMTK_SET_NMEA_OUTPUT_OK)
+
+> $PMTK161,0*28 (suspending)
+	< $PMTK001,161,3*36		(PMTK_STANDBY_SUCCESS)
+
+*/
+
 
 // different commands to set the update rate from once a second (1 Hz) to 10 times a second (10Hz)
 #define PMTK_SET_NMEA_UPDATE_1HZ		"$PMTK220,1000*1F"
@@ -54,7 +89,7 @@ typedef uint8_t flags_t;
 // ask for the release and version
 // returns something like "$PMTK705,AXN_2.10_3339_2012072601,5223,PA6H,1.0*6A"
 #define PMTK_Q_RELEASE					"$PMTK605*31"
-#define PMTK_VERSION_HEADER				"$PMTK705,"
+#define PMTK_VERSION_HEADER				"$PMTK705,AXN"
 
 // request for updates on antenna status 
 #define PGCMD_ANTENNA					"$PGCMD,33,1*6C" 
@@ -75,13 +110,15 @@ typedef uint8_t flags_t;
 #define ADAFRUIT_GPS_FLAGS_START		(1<<1)
 #define ADAFRUIT_GPS_FLAGS_IDENT		(1<<2)
 #define ADAFRUIT_GPS_FLAGS_AWAKE		(1<<3)
-//#define ADAFRUIT_GPS_FLAGS_			(1<<4)
+#define ADAFRUIT_GPS_FLAGS_1HZ_OK		(1<<4)
 #define ADAFRUIT_GPS_FLAGS_STANDBYOK	(1<<5)
-#define ADAFRUTI_GPS_FLAGS_VERSION		(1<<6)
+#define ADAFRUIT_GPS_FLAGS_VERSION		(1<<6)
 #define ADAFRUIT_GPS_FLAGS_OUTPUT_CHG	(1<<7)
 
 
 typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, int);
+typedef uint8_t flags_t;
+
 
 void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bool* char_received);
 void Adafruit_GPS_ResetState(void);

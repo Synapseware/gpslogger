@@ -13,7 +13,6 @@ static int				_buffidx		= 0;
 
 /* Flags for GPS state */
 static flags_t			_gps_flags		= 0;
-static bool				_char_in		= false;
 
 /** Message ready callback function */
 Adafruit_GPS_OnMessageReceived_t _onMessageReady = NULL;
@@ -26,6 +25,9 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bo
 	_en_port	= en_port;
 	_en_pin		= en_pin;
 
+	memset(_data, 0, sizeof(_data) * sizeof(char));
+	_buffidx = 0;
+
 	Adafruit_GPS_ResetState();
 
 	// Initialize the GPS USART interface
@@ -35,36 +37,41 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bo
 	_usart->CTRLA = USART_RXCINTLVL_HI_gc |
 					USART_TXCINTLVL_OFF_gc |
 					USART_DREINTLVL_OFF_gc;
+
+	// set the GPS enable pin to output
+	_en_port->DIRSET = _en_pin;
+	Adafruit_GPS_Enable();
+
+	// setup the FIX pin as input from the GPS
+	GPS_FIX_port->DIRCLR = GPS_FIX_pin;
 }
 
 /** Clears all internal state data */
 void Adafruit_GPS_ResetState(void)
 {
-	memset(_data, 0, sizeof(_data) * sizeof(char));
-	_buffidx = 0;
+
 	_gps_flags = 0;
-	_char_in = false;
 }
 
 /**  */
 flags_t Adafruit_GPS_CurrentState(void)
 {
+
 	return _gps_flags;
 }
 
 /** Enable the GPS */
 void Adafruit_GPS_Enable(void)
 {
-	// set the GPS enable pin to input (high-z)
-	_en_port->DIRCLR = _en_pin;
+	// set the GPS enable pin to low (PNP switch)
+	_en_port->OUTCLR = _en_pin;
 }
 
 /** Disable the GPS */
 void Adafruit_GPS_Disable(void)
 {
-	// set the GPS enable pin to output (initialized to LOW level)
-	_en_port->OUTCLR = _en_pin;
-	_en_port->DIRSET = _en_pin;
+	// set the GPS enable pin to high (PNP switch)
+	_en_port->OUTSET = _en_pin;
 }
 
 /** Sends a command string to the GPS device */
@@ -84,6 +91,10 @@ void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 /** Suspend the GPS to save power */
 void Adafruit_GPS_Suspend(void)
 {
+	// wait for FIX line to go low
+	while ((GPS_FIX_port->IN & GPS_FIX_pin) != 0)
+	{}
+
 	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_STANDBYOK;
 
 	// issue the PMTK suspend command message
@@ -192,51 +203,66 @@ void Adafruit_GPS_Update10Hz(void)
 /**  */
 void Adafruit_GPS_AskForVersion(void)
 {
-	_gps_flags &= ~ADAFRUTI_GPS_FLAGS_VERSION;
+	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_VERSION;
 
 	// Send the version 
 	Adafruit_GPS_SendCommand(PSTR(PMTK_Q_RELEASE));
 }
 
 /**  */
-static void ProcessGpsStateInfo(const char* message, int length)
+static bool ProcessGpsStateInfo(const char* message, int length)
 {
-	if (length < 2 || NULL == message)
+	if (NULL == message || length < 2)
 	{
 		return;
 	}
 
-	if (strcmp_P(message, PSTR(PGACK_CONFIG_COMPLETE)))				// 0
+	if (strncmp_P(message, PSTR(PGACK_CONFIG_COMPLETE), 15) == 0)			// 0
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_COMPLETE;
+		return;
 	}
-	else if (strcmp_P(message, PSTR(PGACK_COLD_STARTUP)))			// 1
+	
+	if (strncmp_P(message, PSTR(PGACK_COLD_STARTUP), 13) == 0)				// 1
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_START;
+		return;
 	}
-	else if (strcmp_P(message, PSTR(PGACK_CHIP_IDENT)))	// 2
+
+	if (strncmp_P(message, PSTR(PGACK_CHIP_IDENT), 18) == 0)				// 2
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_IDENT;
+		return;
 	}
-	else if (strcmp_P(message, PSTR(PMTK_AWAKE)))					// 3
+	
+	if (strncmp_P(message, PSTR(PMTK_AWAKE), 15) == 0)						// 3
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_AWAKE;
+		return;
 	}
-	//else if (strcmp_P(message, PSTR()))					// 4
-	//{
-	//	_gps_flags |= ;
-	//}
-	else if (strcmp_P(message, PSTR(PMTK_STANDBY_SUCCESS)))			// 5
+
+	if (strncmp_P(message, PSTR(PMTK_SET_NMEA_UPDATE_1HZ_OK), 17) == 0)		// 4
+	{
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_1HZ_OK;
+		return;
+	}
+	
+	if (strncmp_P(message, PSTR(PMTK_STANDBY_SUCCESS), 17) == 0)			// 5
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_STANDBYOK;
+		return;
 	}
-	else if (strcmp_P(message, PSTR(PMTK_VERSION_HEADER)))			// 6
+	
+	if (strncmp_P(message, PSTR(PMTK_VERSION_HEADER), 12) == 0)				// 6
 	{
-		_gps_flags |= ADAFRUTI_GPS_FLAGS_VERSION;
+		_gps_flags |= ADAFRUIT_GPS_FLAGS_VERSION;
+		return;
 	}
-	else if (strcmp_P(message, PSTR(PMTK_SET_NMEA_OUTPUT_OK)))		// 7
+	
+	if (strncmp_P(message, PSTR(PMTK_SET_NMEA_OUTPUT_OK), 17) == 0)			// 7
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_OUTPUT_CHG;
+		return;
 	}
 }
 
@@ -258,8 +284,6 @@ ISR(USARTE0_RXC_vect)
 {
 	// capture the received data
 	char data = _usart->DATA;
-
-	_char_in = true;
 
 	// check for end-of-message character from the GPS
 	if ('\n' == data)
