@@ -54,6 +54,33 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
  */
 static FILE USBSerialStream;
 
+static void PrintString_P(const char* message)
+{
+	if (!_hostConnected || NULL == message)
+		return;
+
+	fputs_P(message, &USBSerialStream);
+}
+static void PrintString(const char* message)
+{
+	if (!_hostConnected || NULL == message)
+		return;
+
+	fputs(message, &USBSerialStream);
+}
+static void PrintChar(char data)
+{
+	if (!_hostConnected)
+		return;
+
+	fputc(data, &USBSerialStream);
+}
+static void PrintFlush(void)
+{
+	if (!_hostConnected)
+		return;
+	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+}
 
 /** Configure timers */
 static void Timer_Initialize(void)
@@ -96,53 +123,19 @@ static void Adc_Initialize(void)
 }
  */
 
-/** Prints the contents of the flash */
-static void dumpFlashContents(int32_t length)
-{
-	char msg[256];
-
-	//length = 2048;
-	if (length < 1)
-	{
-		fputs_P(PSTR("  Flash is empty!\r\n"), &USBSerialStream);
-		return;
-	}
-
-	fputs(PSTR("  Contents:\r\n"), &USBSerialStream);
-
-	int32_t count = 0;
-	int pos = 0;
-	begin_read(SPI_CS, 0);
-	while(count++ < length)
-	{
-		char data = read_byte();
-
-		msg[pos++] = data;
-		if (pos < sizeof(msg) - 1)
-			continue;
-
-		msg[pos] = 0;
-		pos = 0;
-
-		fputs(msg, &USBSerialStream);
-		CDC_Device_Flush(&VirtualSerial_CDC_Interface);
-	}
-	end_read(SPI_CS);
-
-	fputs(msg, &USBSerialStream);
-	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
-
-	fputs_P(PSTR("\r\n"), &USBSerialStream);
-}
-
 /** Finds the first free page in the dataflash chip */
 static int32_t FindFirstFreeAddress(void)
 {
+	ERR_LED_port->OUTSET = ERR_LED_pin;
+
 	uint8_t status = device_is_ready(SPI_CS);
 	if (!status)
 	{
 		return -1;
 	}
+
+	ERR_LED_port->OUTCLR = ERR_LED_pin;
+	INFO_LED_port->OUTSET = INFO_LED_pin;
 
 	int32_t address = 0;
 	int32_t freefrom = -1;
@@ -174,6 +167,8 @@ static int32_t FindFirstFreeAddress(void)
 	}
 	end_read(SPI_CS);
 
+	INFO_LED_port->OUTCLR = INFO_LED_pin;
+
 	return freefrom;
 }
 
@@ -190,7 +185,6 @@ static bool SaveNMEA(void)
 	// make sure sentence starts with a valid character
 	if ('$' != _nmea[0])
 	{
-		fputs_P(PSTR("NMEA sentence is invalid\r\n"), &USBSerialStream);
 		return false;
 	}
 
@@ -251,7 +245,6 @@ void HandleLatestGpsMessage(const char* message, int length)
 		return;
 	}
 
-
 	// GPS NMEA data: http://www.gpsinformation.org/dale/nmea.htm
 
 	// parse GPRMC - recommended minimum navigation data
@@ -261,6 +254,8 @@ void HandleLatestGpsMessage(const char* message, int length)
 		// process fix data - look for 'V' or 'A'
 		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 		// no fix:		$GPRMC,072450.000,V,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
+		// 				$GPRMC,043301.000,A,4802.9906,N,12249.8940,W,0.54,0.00,301115,,,A*7E
+		//					   04:33:01am									   30th of November, 2015
 
 		char* p = strchr(message, ',') + 1;
 
@@ -355,19 +350,24 @@ static void InitialGreeting(void)
 {
 	char msg[128];
 
-	sprintf_P(msg, PSTR("GPS Logger v1.1 - 20150801\r\n"));
-	fputs(msg, &USBSerialStream);
-
+	PrintString_P(PSTR("GPS Logger v1.1 - 20150801\r\n"));
+	PrintString_P(PSTR(" Version: "));
 	if (0 != strlen(_gpsVersion))
-		sprintf_P(msg, PSTR("GPS Version: %s\r\n"), _gpsVersion);
+		PrintString(_gpsVersion);
 	else
-		sprintf_P(msg, PSTR("GPS Version: (unknown)\r\n"));
-	fputs(msg, &USBSerialStream);
+		PrintString_P(PSTR("(unknown)"));
+	PrintString_P(PSTR("\r\n"));
 
-	fputs_P(PSTR("Flash info:\r\n"), &USBSerialStream);
+	PrintString_P(PSTR("Flash info:\r\n"));
 
-	sprintf_P(msg, PSTR("  Valid: %c\r\n"), is_valid(SPI_CS) != 0 ? 'Y' : 'N');
-	fputs(msg, &USBSerialStream);
+	PrintString_P(PSTR("  Valid: "));
+	ERR_LED_port->OUTSET = ERR_LED_pin;
+	if (is_valid(SPI_CS))
+		PrintString_P(PSTR("Y"));
+	else
+		PrintString_P(PSTR("N"));	
+	PrintString_P(PSTR("\r\n"));
+	ERR_LED_port->OUTCLR = ERR_LED_pin;
 
 	{
 		/*
@@ -375,11 +375,11 @@ static void InitialGreeting(void)
 
 		global_unprotect(SPI_CS);
 
-		fputs_P(PSTR("  Formatting flash...\r\n"), &USBSerialStream);
+		PrintString_P(PSTR("  Formatting flash...\r\n"));
 		erase_block_4k(SPI_CS, 0);
 		while(is_write_enabled(SPI_CS));
 
-		fputs_P(PSTR("  Done!\r\n"), &USBSerialStream);
+		PrintString_P(PSTR("  Done!\r\n"));
 
 		ERR_LED_port->OUTCLR = ERR_LED_pin;
 		INFO_LED_port->OUTSET = INFO_LED_pin;
@@ -388,16 +388,31 @@ static void InitialGreeting(void)
 		*/
 	}
 
-	fputs_P(PSTR("  Searching for free start address...\r\n"), &USBSerialStream);
+	PrintString_P(PSTR("  Searching for free start address...\r\n"));
 
 	_flashWriteAddr = FindFirstFreeAddress();
 	if (_flashWriteAddr < 0)
-		sprintf_P(msg, PSTR("  Failed to find a free address.\r\n"));
-	else
-		sprintf_P(msg, PSTR("  Flash start address: %u\r\n"), _flashWriteAddr);
-	fputs(msg, &USBSerialStream);
+	{
+		PrintString_P(PSTR("  Failed to find a free address.\r\n"));
+		return;
+	}
 
-	dumpFlashContents(_flashWriteAddr);
+	sprintf_P(msg, PSTR("  Flash start address: %u\r\n"), _flashWriteAddr);
+	PrintString(msg);
+	PrintString_P(PSTR("  Contents:\r\n"));
+
+	begin_read(SPI_CS, 0);
+	while(true)
+	{
+		char data = read_byte();
+		if (0xFF == data)
+			break;
+		PrintChar(data);
+	}
+	end_read(SPI_CS);
+
+	PrintString_P(PSTR("\r\n"));
+	PrintFlush();
 }
 
 /** Print GPS messages to console */
@@ -406,11 +421,9 @@ void LogGpsMessages(const char* message, int length)
 	if (length < 2 || NULL == message)
 		return;
 
-	fputs_P(PSTR("< "), &USBSerialStream);
-	fputs(message, &USBSerialStream);
-	//if (!(message[length-2] == '\r' && message[length-1] == '\n'))
-	//	fputs_P(PSTR("\r\n"), &USBSerialStream);
-	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+	PrintString_P(PSTR("< "));
+	PrintString(message);
+	PrintFlush();
 }
 
 /**  */
@@ -420,20 +433,18 @@ void GpsMenu(void)
 	Adafruit_GPS_OnMessageReceived(&LogGpsMessages);
 	Adafruit_GPS_Suspend();
 
-	fputs_P(PSTR("GPS Interactive Menu\r\n"), &USBSerialStream);
-	fputs_P(PSTR("H - Hot start GPS\r\n"), &USBSerialStream);
-	fputs_P(PSTR("S - Suspend\r\n"), &USBSerialStream);
-	fputs_P(PSTR("W - Wakeup\r\n"), &USBSerialStream);
-	fputs_P(PSTR("U - Set update to 1Hz\r\n"), &USBSerialStream);	
-	fputs_P(PSTR("V - Ask for version\r\n"), &USBSerialStream);
-	fputs_P(PSTR("O - Output off\r\n"), &USBSerialStream);
-	fputs_P(PSTR("M - Minimum (GPRMC) logging only\r\n"), &USBSerialStream);
-	fputs_P(PSTR("R - Reset state\r\n"), &USBSerialStream);
-	fputs_P(PSTR("X - Exit\r\n"), &USBSerialStream);
-	//fputs_P(PSTR("\r\n"), &USBSerialStream);
-	//fputs_P(PSTR("\r\n"), &USBSerialStream);
-	fputs_P(PSTR("\r\n"), &USBSerialStream);
-	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
+	PrintString_P(PSTR("GPS Interactive Menu\r\n"));
+	PrintString_P(PSTR("H - Hot start GPS\r\n"));
+	PrintString_P(PSTR("S - Suspend\r\n"));
+	PrintString_P(PSTR("W - Wakeup\r\n"));
+	PrintString_P(PSTR("U - Set update to 1Hz\r\n"));	
+	PrintString_P(PSTR("V - Ask for version\r\n"));
+	PrintString_P(PSTR("O - Output off\r\n"));
+	PrintString_P(PSTR("M - Minimum (GPRMC) logging only\r\n"));
+	PrintString_P(PSTR("R - Reset state\r\n"));
+	PrintString_P(PSTR("X - Exit\r\n"));
+	PrintString_P(PSTR("\r\n"));
+	PrintFlush();
 
 	while (1)
 	{
@@ -444,39 +455,39 @@ void GpsMenu(void)
 		switch (usb | 0x40)
 		{
 			case 'h':
-				fputs_P(PSTR("> $PMTK101*32 (hot start)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> $PMTK101*32 (hot start)\r\n"));
 				Adafruit_GPS_HotStart();
 				break;
 			case 's':
-				fputs_P(PSTR("> $PMTK161,0*28 (suspending)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> $PMTK161,0*28 (suspending)\r\n"));
 				Adafruit_GPS_Suspend();
 				break;
 			case 'w':
-				fputs_P(PSTR("> ' ' (wakeup)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> ' ' (wakeup)\r\n"));
 				Adafruit_GPS_Wakeup();
 				break;
 			case 'u':
-				fputs_P(PSTR("> $PMTK220,100*2F (1Hz output)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> $PMTK220,100*2F (1Hz output)\r\n"));
 				Adafruit_GPS_Update1Hz();
 				break;
 			case 'v':
-				fputs_P(PSTR("> $PMTK605*31 (version query)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> $PMTK605*31 (version query)\r\n"));
 				Adafruit_GPS_AskForVersion();
 				break;
 			case 'o':
-				fputs_P(PSTR("> $PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (output off)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> $PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (output off)\r\n"));
 				Adafruit_GPS_OutputOff();
 				break;
 			case 'm':
-				fputs_P(PSTR("> $PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29 (GPRMC only)\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("> $PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29 (GPRMC only)\r\n"));
 				Adafruit_GPS_RMCOnly();
 				break;
 			case 'r':
-				fputs_P(PSTR("Resetting GPS\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("Resetting GPS\r\n"));
 				Adafruit_GPS_ResetState();
 				break;
 			case 'x':
-				fputs_P(PSTR("Exit GPS menu!\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("Exit GPS menu!\r\n"));
 				return;
 		}
 	}
@@ -501,40 +512,30 @@ int main(void)
 		if (_saveNmea)
 		{
 			// shutoff the GPS
-			fputs_P(PSTR("Suspending GPS module.\r\n"), &USBSerialStream);
+			PrintString_P(PSTR("Suspending GPS module.\r\n"));
 			DisableGps();
 
-			fputs_P(PSTR("Saving NMEA sentence:\r\n"), &USBSerialStream);
-			fputs(_nmea, &USBSerialStream);
+			PrintString_P(PSTR("Saving NMEA sentence:\r\n"));
+			PrintString(_nmea);
 
 			sprintf_P(msg, PSTR("  address before: %u\r\n"), _flashWriteAddr);
-			fputs(msg, &USBSerialStream);
+			PrintString(msg);
 
 			if (SaveNMEA())
 			{
-				fputs_P(PSTR("  successfully saved nmea\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("  successfully saved nmea\r\n"));
 
 				sprintf_P(msg, PSTR("  address after: %u\r\n"), _flashWriteAddr);
-				fputs(msg, &USBSerialStream);
+				PrintString(msg);
 			}
 			else
-				fputs_P(PSTR("  failed to save\r\n"), &USBSerialStream);
+				PrintString_P(PSTR("  failed to save\r\n"));
 
 			_saveNmea = false;
 			_gpsFixTimeout = 0;
 			_allowedMisses = 0;
 
-			uint32_t latestAddress = FindFirstFreeAddress();
-			sprintf_P(msg, PSTR("  next free address: %u\r\n"), latestAddress);
-			fputs(msg, &USBSerialStream);
-
 			//EnterPowerSave();
-		}
-
-		// reset the host-connected delay
-		if (!_hostConnected)
-		{
-			delay = 3;
 		}
 
 		// only main-loop code below this point
@@ -564,7 +565,7 @@ int main(void)
 					if (_allowedMisses)
 					{
 						sprintf_P(msg, PSTR("Skipping fix timeout %i\r\n"), _allowedMisses);
-						fputs(msg, &USBSerialStream);
+						PrintString(msg);
 						_allowedMisses--;
 					}
 					else
@@ -575,8 +576,8 @@ int main(void)
 						// turn on the fix error status LED
 						ERR_LED_port->OUTSET = ERR_LED_pin;
 
-						fputs_P(PSTR("GPS failed to get a fix within the timeout period.\r\n"), &USBSerialStream);
-						fputs_P(PSTR("Disabling GPS.\r\n"), &USBSerialStream);
+						PrintString_P(PSTR("GPS failed to get a fix within the timeout period.\r\n"));
+						PrintString_P(PSTR("Disabling GPS.\r\n"));
 					}
 				}
 			}
@@ -589,7 +590,7 @@ int main(void)
 		}
 		else if (!_allowedMisses)
 		{
-			fputs_P(PSTR("Enabling GPS.\r\n"), &USBSerialStream);
+			PrintString_P(PSTR("Enabling GPS.\r\n"));
 
 			// recording timeout is 0 - wakeup the GPS module
 			_recordingTimeout = GPS_INTERVAL;
@@ -603,9 +604,14 @@ int main(void)
 		}
 
 
-		// send greeting if we've hit our host-timeout and the host is connected
-		if (_hostConnected)
+		// reset the host-connected delay
+		if (!_hostConnected)
 		{
+			delay = 3;
+		}
+		else
+		{
+			// send greeting if we've hit our host-timeout and the host is connected
 			if (delay)
 			{
 				delay--;
@@ -646,12 +652,12 @@ void SetupHardware(void)
 	_secondsTick		= 0;
 	_hostConnected		= 0;
 	_flashWriteAddr		= 0;
+	_recordingTimeout	= 0;
 	_hasFix				= false;
 	_saveNmea			= false;
 	_allowedMisses		= GPS_FIX_MISSES;
 	memset(_nmea, 0, sizeof(_nmea));
 	memset(_gpsVersion, 0, sizeof(_gpsVersion));
-	_recordingTimeout	= 0;
 
 	/* Powerdown unused/uneeded modules to save power */
 	/*
@@ -704,7 +710,7 @@ void SetupHardware(void)
 	// Initialize the SPI device for the flash chip
 	SPI_Init(&SPI_DEVICE,
 		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_32 |
+		SPI_SPEED_FCPU_DIV_2 |
 		SPI_ORDER_MSB_FIRST |
 		SPI_SCK_LEAD_RISING |
 		SPI_SAMPLE_LEADING

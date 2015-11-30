@@ -39,6 +39,6 @@ I have created this board as a project for a friend.  You are welcome to copy th
 * Wakeup and get a fix every 5 mintues
 * Stop trying to get fix data after xx seconds
     - prevent system from getting stuck without satellite data
-* Each NMEA sentence is truncated to 127 bytes (+1 \0 byte)
-* 2 NMEA sentences are saved to the flash together in a single page-write operation
 * Fix data is parsed from GPRMC message
+* Each NMEA log sentence is appended to the log file at the start of the last message
+
