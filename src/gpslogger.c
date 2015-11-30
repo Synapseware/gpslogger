@@ -407,6 +407,7 @@ static void InitialGreeting(void)
 		char data = read_byte();
 		if (0xFF == data)
 			break;
+
 		PrintChar(data);
 	}
 	end_read(SPI_CS);
@@ -504,7 +505,8 @@ int main(void)
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
-	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
+	//CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
+	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
 	// Begin main loop
 	while(true)
