@@ -720,6 +720,18 @@ void SetupHardware(void)
 
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, SPI_PORT, SPI_CS);
+
+	// enable pullups on SPI output pins
+	/*
+	PORT_ConfigurePins(SPI_PORT,
+			PIN4_bm | PIN5_bm | PIN7_bm,
+			0,
+			0,
+			PORT_OPC_WIREDANDPULL_gc,
+			0
+		);
+	PORTCFG.MPCMASK = 0;
+	*/
 }
 
 /** Event handler for the library USB Connection event. */

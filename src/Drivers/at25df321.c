@@ -15,10 +15,12 @@ void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs)
 	// Make sure interrupts are disabled
 	_spi_dev->INTCTRL = SPI_INTLVL_OFF_gc;
 
+	uint8_t outpins = PIN4_bm | PIN5_bm | PIN7_bm;
+
 	// setup pins
 	_spi_port->OUTSET = cs;
 	_spi_port->DIRCLR = PIN6_bm;
-	_spi_port->DIRSET = PIN4_bm | PIN5_bm | PIN7_bm;
+	_spi_port->DIRSET = outpins;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
