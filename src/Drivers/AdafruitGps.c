@@ -43,7 +43,7 @@ void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bo
 	Adafruit_GPS_Enable();
 
 	// setup the FIX pin as input from the GPS
-	GPS_FIX_port->DIRCLR = GPS_FIX_pin;
+	GPS_FIX_port.DIRCLR = GPS_FIX_pin;
 }
 
 /** Clears all internal state data */
@@ -92,7 +92,7 @@ void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
 void Adafruit_GPS_Suspend(void)
 {
 	// wait for FIX line to go low
-	while ((GPS_FIX_port->IN & GPS_FIX_pin) != 0)
+	while ((GPS_FIX_port.IN & GPS_FIX_pin) != 0)
 	{}
 
 	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_STANDBYOK;
@@ -214,56 +214,58 @@ static bool ProcessGpsStateInfo(const char* message, int length)
 {
 	if (NULL == message || length < 2)
 	{
-		return;
+		return false;
 	}
 
 	if (strncmp_P(message, PSTR(PGACK_CONFIG_COMPLETE), 15) == 0)			// 0
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_COMPLETE;
-		return;
+		return true;
 	}
 	
 	if (strncmp_P(message, PSTR(PGACK_COLD_STARTUP), 13) == 0)				// 1
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_START;
-		return;
+		return true;
 	}
 
 	if (strncmp_P(message, PSTR(PGACK_CHIP_IDENT), 18) == 0)				// 2
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_IDENT;
-		return;
+		return true;
 	}
 	
 	if (strncmp_P(message, PSTR(PMTK_AWAKE), 15) == 0)						// 3
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_AWAKE;
-		return;
+		return true;
 	}
 
 	if (strncmp_P(message, PSTR(PMTK_SET_NMEA_UPDATE_1HZ_OK), 17) == 0)		// 4
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_1HZ_OK;
-		return;
+		return true;
 	}
 	
 	if (strncmp_P(message, PSTR(PMTK_STANDBY_SUCCESS), 17) == 0)			// 5
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_STANDBYOK;
-		return;
+		return true;
 	}
 	
 	if (strncmp_P(message, PSTR(PMTK_VERSION_HEADER), 12) == 0)				// 6
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_VERSION;
-		return;
+		return true;
 	}
 	
 	if (strncmp_P(message, PSTR(PMTK_SET_NMEA_OUTPUT_OK), 17) == 0)			// 7
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_OUTPUT_CHG;
-		return;
+		return true;
 	}
+
+	return false;
 }
 
 /** Writes a byte of data to the internal buffer */
