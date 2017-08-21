@@ -8,7 +8,6 @@ volatile int32_t	_flashWriteAddr		= 0;
 
 
 /** NMEA processing data & flags */
-static bool			_waitForGpsData		= false;
 static bool			_hasFix				= false;
 static bool			_saveNmea			= false;
 static char			_nmea[256];
@@ -127,16 +126,13 @@ static void InitializeADC(void)
 /** Finds the first free page in the dataflash chip */
 static int32_t FindFirstFreeAddress(void)
 {
-	ERR_LED_port.OUTSET = ERR_LED_pin;
-
-	uint8_t status = device_is_ready(SPI_CS);
-	if (!status)
+	if (!device_is_ready(SPI_CS))
 	{
-		return -1;
+		TurnOnErrLed();
 	}
 
-	ERR_LED_port.OUTCLR = ERR_LED_pin;
-	INFO_LED_port.OUTSET = INFO_LED_pin;
+	TurnOffErrLed();
+	TurnOnDiagLed();
 
 	int32_t address = 0;
 	int32_t freefrom = -1;
@@ -168,7 +164,7 @@ static int32_t FindFirstFreeAddress(void)
 	}
 	end_read(SPI_CS);
 
-	INFO_LED_port.OUTCLR = INFO_LED_pin;
+	TurnOffDiagLed();
 
 	return freefrom;
 }
@@ -189,11 +185,11 @@ static bool SaveNMEA(void)
 		return false;
 	}
 
-	cli();
+	GlobalInterruptDisable();
 
 	global_unprotect(SPI_CS);
 
-	ERR_LED_port.OUTSET = ERR_LED_pin;
+	TurnOnDiagLed();
 
 	// write latest message to flash
 	int idx = 0;
@@ -220,9 +216,9 @@ static bool SaveNMEA(void)
 	end_write(SPI_CS);
 	while(is_write_enabled(SPI_CS));
 
-	ERR_LED_port.OUTCLR = ERR_LED_pin;
+	TurnOffDiagLed();
 
-	sei();
+	GlobalInterruptEnable();
 
 	return true;
 }
@@ -253,10 +249,10 @@ void HandleLatestGpsMessage(const char* message, int length)
 	if (0 == strncmp(message, cmd_buff, 6))
 	{
 		// process fix data - look for 'V' or 'A'
+		//					  time(hhmmss.sss)									 date(yymmdd)
 		// with fix:	$GPRMC,072450.000,A,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 		// no fix:		$GPRMC,072450.000,V,4078.8163,N,10921.9609,W,0.14,355.98,170815,,,A*7A
 		// 				$GPRMC,043301.000,A,4802.9906,N,12249.8940,W,0.54,0.00,301115,,,A*7E
-		//					   04:33:01am									   30th of November, 2015
 
 		char* p = strchr(message, ',') + 1;
 
@@ -304,49 +300,52 @@ void HandleLatestGpsMessage(const char* message, int length)
 static void DisableGps(void)
 {
 	Adafruit_GPS_Suspend();
-	Adafruit_GPS_Disable();
+	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_STANDBYOK) == 0);
 }
 
 /** Poweron the GPS after a poweroff */
 static void EnableGps(void)
 {	
-	INFO_LED_port.OUTSET = INFO_LED_pin;
+	TurnOnInfoLed();
 	Adafruit_GPS_Enable();
-	Adafruit_GPS_Wakeup();
-
 	Adafruit_GPS_ResetState();
-	Adafruit_GPS_HotStart();
+
+	Adafruit_GPS_Wakeup();
+	Adafruit_GPS_ColdStart();
+
 	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_COMPLETE) == 0);
 	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_START) == 0);
 	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_AWAKE) == 0);
 
-	Adafruit_GPS_ResetState();
 	Adafruit_GPS_Update1Hz();
 	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_1HZ_OK) == 0);
 
-	Adafruit_GPS_ResetState();
 	Adafruit_GPS_RMCOnly();
 	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) == 0);
-	INFO_LED_port.OUTCLR = INFO_LED_pin;
+	TurnOffInfoLed();
 }
 
-/** System startup init */
+/** Configure the GPS hardware */
 static void InitializeGps(void)
 {
-	Adafruit_GPS_Init(&GPS_UART, &GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
-	Adafruit_GPS_OnMessageReceived(&HandleLatestGpsMessage);
+	ConfigureGpsUart();
+	ConfigureGpsPins();
+
+	Adafruit_GPS_Init(&HandleLatestGpsMessage);
 
 	EnableGps();
 
-	INFO_LED_port.OUTSET = INFO_LED_pin;
+	TurnOnInfoLed();
+
 	Adafruit_GPS_ResetState();
 	Adafruit_GPS_AskForVersion();
+
 	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_VERSION) == 0);
-	INFO_LED_port.OUTCLR = INFO_LED_pin;
+
+	TurnOffInfoLed();
 }
 
-/** Prints an initial greeting to the USB port
-*/
+/** Prints an initial greeting to the USB port */
 static void InitialGreeting(void)
 {
 	char msg[128];
@@ -362,17 +361,17 @@ static void InitialGreeting(void)
 	PrintString_P(PSTR("Flash info:\r\n"));
 
 	PrintString_P(PSTR("  Valid: "));
-	ERR_LED_port.OUTSET = ERR_LED_pin;
+	TurnOnErrLed();
 	if (is_valid(SPI_CS))
 		PrintString_P(PSTR("Y"));
 	else
 		PrintString_P(PSTR("N"));	
 	PrintString_P(PSTR("\r\n"));
-	ERR_LED_port.OUTCLR = ERR_LED_pin;
+	TurnOffErrLed();
 
 	{
 		/*
-		ERR_LED_port.OUTSET = ERR_LED_pin;
+		TurnOnErrLed();
 
 		global_unprotect(SPI_CS);
 
@@ -382,8 +381,8 @@ static void InitialGreeting(void)
 
 		PrintString_P(PSTR("  Done!\r\n"));
 
-		ERR_LED_port.OUTCLR = ERR_LED_pin;
-		INFO_LED_port.OUTSET = INFO_LED_pin;
+		TurnOffErrLed();
+		TurnOnInfoLed();
 
 		while(1);
 		*/
@@ -431,8 +430,7 @@ void LogGpsMessages(const char* message, int length)
 /**  */
 void GpsMenu(void)
 {
-	Adafruit_GPS_Init(&GPS_UART, &GPS_EN_port, GPS_EN_pin, &_waitForGpsData);
-	Adafruit_GPS_OnMessageReceived(&LogGpsMessages);
+	Adafruit_GPS_Init(&LogGpsMessages);
 	Adafruit_GPS_Suspend();
 
 	PrintString_P(PSTR("GPS Interactive Menu\r\n"));
@@ -490,6 +488,7 @@ void GpsMenu(void)
 				break;
 			case 'x':
 				PrintString_P(PSTR("Exit GPS menu!\r\n"));
+				Adafruit_GPS_Init(&HandleLatestGpsMessage);
 				return;
 		}
 	}
@@ -577,7 +576,7 @@ int main(void)
 						DisableGps();
 
 						// turn on the fix error status LED
-						ERR_LED_port.OUTSET = ERR_LED_pin;
+						TurnOnErrLed();
 
 						PrintString_P(PSTR("GPS failed to get a fix within the timeout period.\r\n"));
 						PrintString_P(PSTR("Disabling GPS.\r\n"));
@@ -588,7 +587,7 @@ int main(void)
 			if (!_recordingTimeout)
 			{
 				// turn on the diag LED to indicate normal suspend
-				DIAG_LED_port.OUTSET = DIAG_LED_pin;
+				TurnOnDiagLed();
 			}
 		}
 		else if (!_allowedMisses)
@@ -602,8 +601,8 @@ int main(void)
 			EnableGps();
 
 			// turn off the fix error status LED
-			ERR_LED_port.OUTCLR = ERR_LED_pin;
-			DIAG_LED_port.OUTCLR = DIAG_LED_pin;
+			TurnOffErrLed();
+			TurnOffDiagLed();
 		}
 
 
@@ -638,16 +637,6 @@ void SetupHardware(void)
 	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
 	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
 
-	/* Configure RTC to use internal clock */
-	//OSC.CTRL |= OSC_RC32KEN_bm;
-	//while((OSC.STATUS & OSC_RC32KRDY_bm) == 0);
-	//CLK.RTCCTRL = CLK_RTCSRC_RCOSC_gc | CLK_RTCEN_bm;
-	//while (RTC_Busy());
-
-	// TODO: Handle proper timeout between GPS fix timeout and logging timeout
-	//RTC_Initialize( RTC_CYCLES_1S, 0, 0, RTC_PRESCALER_DIV1_gc );
-	//RTC_SetIntLevels( RTC_OVFINTLVL_OFF_gc, RTC_COMPINTLVL_OFF_gc );
-
 	/* Enable lov, med and high level interrupts in the PMIC */
 	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
 
@@ -662,18 +651,6 @@ void SetupHardware(void)
 	memset(_nmea, 0, sizeof(_nmea));
 	memset(_gpsVersion, 0, sizeof(_gpsVersion));
 
-	/* Powerdown unused/uneeded modules to save power */
-	/*
-	power_all_disable();
-	power_adca_enable();
-	power_usb_enable();
-	power_rtc_enable();
-	power_usarte0_enable();
-	power_spic_enable();
-	power_tc0c_enable();
-	power_tc1c_enable();
-	*/
-
 	/* Hardware Initialization */
 	USB_Init();
 
@@ -681,27 +658,15 @@ void SetupHardware(void)
 	InitializeTimers();
 	InitializeADC();
 
-	GlobalInterruptEnable();
-
-	// initialize user hardware here
+	// setup LEDs
 	LED_PORT.OUTCLR = LED_PIN;
 	LED_PORT.DIRSET = LED_PIN;
-
-	// initialize debug LED
-	DIAG_LED_port.OUTCLR = DIAG_LED_pin;
-	DIAG_LED_port.DIRSET = DIAG_LED_pin;
-
-	// initialize error LED
-	ERR_LED_port.OUTCLR = ERR_LED_pin;
+	TurnOffErrLed();
 	ERR_LED_port.DIRSET = ERR_LED_pin;
-
-	INFO_LED_port.OUTCLR = INFO_LED_pin;
+	TurnOffDiagLed();
+	DIAG_LED_port.DIRSET = DIAG_LED_pin;
+	TurnOffInfoLed();
 	INFO_LED_port.DIRSET = INFO_LED_pin;
-
-	// intialize the GPS IO pins
-	GPS_UART_port.DIRSET = GPS_TX_pin;
-	GPS_UART_port.OUTSET = GPS_TX_pin;
-	GPS_UART_port.DIRCLR = GPS_RX_pin;
 
 	// Prepare GPS module
 	InitializeGps();
@@ -723,24 +688,15 @@ void SetupHardware(void)
 	// Initialize the FLASH driver
 	FlashDriver_Init(&SPI_DEVICE, &SPI_PORT, SPI_CS);
 
-	// enable pullups on SPI output pins
-	/*
-	PORT_ConfigurePins(SPI_PORT,
-			PIN4_bm | PIN5_bm | PIN7_bm,
-			0,
-			0,
-			PORT_OPC_WIREDANDPULL_gc,
-			0
-		);
-	PORTCFG.MPCMASK = 0;
-	*/
+	// all done with setup - enable interrupts
+	GlobalInterruptEnable();
 }
 
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
 	// turn on the diag LED
-	//DIAG_LED_port.OUTSET = DIAG_LED_pin;
+	//TurnOnDiagLed();
 
 	_hostConnected = 1;
 }
@@ -749,7 +705,7 @@ void EVENT_USB_Device_Connect(void)
 void EVENT_USB_Device_Disconnect(void)
 {
 	// turn off the diag LED
-	//DIAG_LED_port.OUTCLR = DIAG_LED_pin;
+	//TurnOffDiagLed();
 
 	_hostConnected = 0;
 }
@@ -832,4 +788,12 @@ ISR(RTC_OVF_vect)
 {
 
 	// TODO: 
+}
+
+/** GPS USART Receive interrupt handler */
+ISR(USARTE0_RXC_vect)
+{
+	char data = GPS_UART.DATA;
+
+	HandleGpsSerialInterrupt(data);
 }

@@ -120,12 +120,11 @@ typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, int);
 typedef uint8_t flags_t;
 
 
-void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bool* char_received);
+void Adafruit_GPS_Init(Adafruit_GPS_OnMessageReceived_t handler);
 void Adafruit_GPS_ResetState(void);
 flags_t Adafruit_GPS_CurrentState(void);
 void Adafruit_GPS_Enable(void);
 void Adafruit_GPS_Disable(void);
-void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler);
 void Adafruit_GPS_Suspend(void);
 void Adafruit_GPS_WaitForMessage(const char* msg);
 void Adafruit_GPS_Wakeup(void);
@@ -144,5 +143,6 @@ void Adafruit_GPS_OutputOff(void);
 
 void Adafruit_GPS_AskForVersion(void);
 
+void HandleGpsSerialInterrupt(const char data);
 
 #endif

@@ -20,51 +20,16 @@
 #include <LUFA/Drivers/USB/USB.h>
 #include <LUFA/Platform/Platform.h>
 
-
+#include "hal.h"
 #include "Drivers/AdafruitGps.h"
 #include "Drivers/TC_driver.h"
 #include "Drivers/at25df321.h"
 #include "Drivers/rtc_driver.h"
 
 
-#define LED_PORT		PORTE
-#define LED_PIN			PIN1_bm
-
-// GPS UART setup
-#define GPS_UART_port	PORTE
-#define GPS_RX_pin		PIN2_bm
-#define GPS_TX_pin		PIN3_bm
-#define GPS_UART		USARTE0
-
-// GPS enable (powers GPS on & off)
-#define GPS_EN_port		PORTC
-#define GPS_EN_pin		PIN3_bm
-
-// GPS fix output (input to board)
-#define GPS_FIX_port	PORTD
-#define GPS_FIX_pin		PIN5_bm
-
-// LED setup
-#define ERR_LED_port	PORTB
-#define ERR_LED_pin		PIN2_bm
-
-#define DIAG_LED_port	PORTB
-#define DIAG_LED_pin	PIN1_bm
-
-#define INFO_LED_port	PORTB
-#define INFO_LED_pin	PIN0_bm
-
-#define SPI_DEVICE		SPIC
-#define SPI_PORT		PORTC
-#define SPI_CS			PIN4_bm
-
-
+// USB configuration
 #define USB_TIMER_MS_DELAY	100
 #define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
-
-#define GPS_INTERVAL	120
-#define GPS_TIMEOUT		60
-#define GPS_FIX_MISSES	5
 
 
 /* Function Prototypes: */

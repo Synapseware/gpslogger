@@ -2,11 +2,6 @@
 
 
 
-/** Globals */
-static USART_t *		_usart			= 0;
-static PORT_t *			_en_port		= 0;
-static uint8_t			_en_pin			= 0;
-
 /** Create the buffer structure and its underlying storage array */
 static char				_data[256];
 static int				_buffidx		= 0;
@@ -18,32 +13,22 @@ static flags_t			_gps_flags		= 0;
 Adafruit_GPS_OnMessageReceived_t _onMessageReady = NULL;
 
 
-/** Initialize the Adafruit GPS library */
-void Adafruit_GPS_Init(USART_t* const usart, PORT_t* en_port, uint8_t en_pin, bool* char_received)
+/** Resets the GPS USART receive buffer */
+static void ResetReceiveBuffer(void)
 {
-	_usart		= usart;
-	_en_port	= en_port;
-	_en_pin		= en_pin;
-
-	memset(_data, 0, sizeof(_data) * sizeof(char));
+	memset(_data, 0, sizeof(_data));
 	_buffidx = 0;
+}
 
-	Adafruit_GPS_ResetState();
 
-	// Initialize the GPS USART interface
-	Serial_Init(_usart, 9600, false);
+/** Initialize the Adafruit GPS library */
+void Adafruit_GPS_Init(Adafruit_GPS_OnMessageReceived_t handler)
+{
+	_onMessageReady = handler;
 
-	// enable specific USART interrupts
-	_usart->CTRLA = USART_RXCINTLVL_HI_gc |
-					USART_TXCINTLVL_OFF_gc |
-					USART_DREINTLVL_OFF_gc;
-
-	// set the GPS enable pin to output
-	_en_port->DIRSET = _en_pin;
+	ResetReceiveBuffer();
+	Adafruit_GPS_ResetState();	
 	Adafruit_GPS_Enable();
-
-	// setup the FIX pin as input from the GPS
-	GPS_FIX_port.DIRCLR = GPS_FIX_pin;
 }
 
 /** Clears all internal state data */
@@ -53,7 +38,7 @@ void Adafruit_GPS_ResetState(void)
 	_gps_flags = 0;
 }
 
-/**  */
+/** Returns the current status flags value */
 flags_t Adafruit_GPS_CurrentState(void)
 {
 
@@ -63,37 +48,28 @@ flags_t Adafruit_GPS_CurrentState(void)
 /** Enable the GPS */
 void Adafruit_GPS_Enable(void)
 {
-	// set the GPS enable pin to low (PNP switch)
-	_en_port->OUTCLR = _en_pin;
+
+	EnableGpsModule();
 }
 
 /** Disable the GPS */
 void Adafruit_GPS_Disable(void)
 {
-	// set the GPS enable pin to high (PNP switch)
-	_en_port->OUTSET = _en_pin;
+
+	DisableGpsModule();
 }
 
 /** Sends a command string to the GPS device */
 static void Adafruit_GPS_SendCommand(const char* command)
 {
-	Serial_SendString_P(_usart, command);
-	Serial_SendString_P(_usart, PSTR("\r\n"));
-}
-
-/** Gets called when a message from the GPS module is available */
-void Adafruit_GPS_OnMessageReceived(Adafruit_GPS_OnMessageReceived_t handler)
-{
-	// assign message handler
-	_onMessageReady = handler;
+	WriteToGpsUart_P(command);
+	WriteToGpsUart_P(PSTR("\r\n"));
 }
 
 /** Suspend the GPS to save power */
 void Adafruit_GPS_Suspend(void)
 {
-	// wait for FIX line to go low
-	while ((GPS_FIX_port.IN & GPS_FIX_pin) != 0)
-	{}
+	WaitForFixLineLow();
 
 	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_STANDBYOK;
 
@@ -107,7 +83,7 @@ void Adafruit_GPS_Wakeup(void)
 	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_AWAKE;
 
 	// wakeup the device by sending a single character
-	Serial_SendString_P(_usart, PSTR(" "));
+	WriteToGpsUart_P(PSTR(" "));
 }
 
 /**  */
@@ -124,7 +100,7 @@ void Adafruit_GPS_WarmStart(void)
 {
 	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_START;
 
-	// issue the cold start command
+	// issue the warm start command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_WARM_START));
 }
 
@@ -133,7 +109,7 @@ void Adafruit_GPS_HotStart(void)
 {
 	_gps_flags &= ~ADAFRUIT_GPS_FLAGS_START;
 
-	// issue the cold start command
+	// issue the hot start command
 	Adafruit_GPS_SendCommand(PSTR(PMTK_CMD_HOT_START));
 }
 
@@ -209,7 +185,7 @@ void Adafruit_GPS_AskForVersion(void)
 	Adafruit_GPS_SendCommand(PSTR(PMTK_Q_RELEASE));
 }
 
-/**  */
+/** Sets various state flags of the GPS  */
 static bool ProcessGpsStateInfo(const char* message, int length)
 {
 	if (NULL == message || length < 2)
@@ -281,38 +257,40 @@ static void writeData(char data)
 	}
 }
 
-/** GPS USART Receive interrupt handler */
-ISR(USARTE0_RXC_vect)
+/** Callback for the GPS USART receive interrupt */
+void HandleGpsSerialInterrupt(const char data)
 {
-	// capture the received data
-	char data = _usart->DATA;
-
-	// check for end-of-message character from the GPS
-	if ('\n' == data)
+	switch (data)
 	{
-		writeData(data);
-		writeData(0);
+		// check for end-of-message character from the GPS
+		case '\n':
+			writeData(data);
+			writeData(0);
 
-		// process GPS state data
-		ProcessGpsStateInfo(_data, _buffidx);
+			// process GPS state data
+			if (ProcessGpsStateInfo(_data, _buffidx))
+			{
+				ResetReceiveBuffer();
+				break;
+			}
 
-		if (NULL != _onMessageReady)
-			_onMessageReady(_data, _buffidx);
+			// Message was not state data - process
+			if (NULL != _onMessageReady)
+			{
+				_onMessageReady(_data, _buffidx);
+				ResetReceiveBuffer();
+			}
 
-		memset(_data, 0, sizeof(_data));
-		_buffidx = 0;
-	}
-	else
-	{
+			break;
+
 		// check for start-of-message character from the GPS
-		if ('$' == data)
-		{
-			// reset the buffer
-			memset(_data, 0, sizeof(_data));
-			_buffidx = 0;
-		}
+		// and reset the buffer
+		case '$':
+			ResetReceiveBuffer();
 
 		// add the data to the buffer
-		writeData(data);
+		default:
+			writeData(data);
+			break;
 	}
 }
