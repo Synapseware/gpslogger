@@ -10,30 +10,40 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "Descriptors.h"
-#include "NMEAParser.h"
-
+#include <LUFA/Platform/Platform.h>
+#include <LUFA/Drivers/Board/Board.h>
+#include <LUFA/Drivers/Board/LEDs.h>
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
-#include <LUFA/Drivers/Board/LEDs.h>
-#include <LUFA/Drivers/Board/Board.h>
+#include <LUFA/Drivers/Peripheral/TWI.h>
 #include <LUFA/Drivers/USB/USB.h>
-#include <LUFA/Platform/Platform.h>
 
 #include "hal.h"
 #include "Drivers/AdafruitGps.h"
 #include "Drivers/TC_driver.h"
 #include "Drivers/at25df321.h"
 #include "Drivers/rtc_driver.h"
-
+#include "Drivers/hd44780_twi.h"
+#include "Descriptors.h"
+#include "NMEAParser.h"
 
 // USB configuration
-#define USB_TIMER_MS_DELAY	100
+#define USB_TIMER_MS_DELAY	50
 #define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
+#define USB_CONNECTED_DELAY	100
+#define USB_DISCONN_DELAY	15625
 
+// GPS constants
+#define GPS_INTERVAL	120
+#define GPS_TIMEOUT		60
+#define GPS_FIX_MISSES	5
 
-/* Function Prototypes: */
-void SetupHardware(void);
+// LCD info
+// Using a PCF8574AT (default I2C address is 0x3F) I2C expander
+#define LCD_BAUD		100000
+#define LCD_TWI_ADDR	0x7E
+
+void HandleLatestGpsMessage(const char* message, int length);
 
 void CDC_ProcessControlStateChange(void);
 void EVENT_USB_Device_Connect(void);

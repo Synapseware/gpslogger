@@ -44,18 +44,57 @@
 #ifndef __BOARD_USER_H__
 #define __BOARD_USER_H__
 
-	/* Includes: */
+	  /* Includes: */
 		// TODO: Add any required includes here
 
-	/* Enable C linkage for C++ Compilers: */
+    /* Enable C linkage for C++ Compilers: */
 		#if defined(__cplusplus)
 			extern "C" {
 		#endif
 
-	/* Preprocessor Checks: */
+    /* Preprocessor Checks: */
 		#if !defined(__INCLUDE_FROM_BOARD_H)
 			#error Do not include this file directly. Include LUFA/Drivers/Board/Board.h instead.
 		#endif
+
+
+    // GPS
+    #define GPS_UART_port PORTE
+    #define GPS_RX_pin    PIN2_bm
+    #define GPS_TX_pin    PIN3_bm
+    #define GPS_UART      USARTE0
+    #define GPS_EN_port   PORTC
+    #define GPS_EN_pin    PIN3_bm
+    #define GPS_FIX_port  PORTD
+    #define GPS_FIX_pin   PIN5_bm
+
+    // Flash device
+    #define SPI_DEVICE    SPIC
+    #define SPI_PORT      PORTC
+    #define SPI_CS        PIN4_bm
+    #define SPI_MOSI      PIN5_bm
+    #define SPI_MISO      PIN6_bm
+    #define SPI_SCK       PIN7_bm
+
+    // Built-in LED
+    #define LED_PORT      PORTE
+    #define LED_PIN       PIN1_bm
+
+    // LED setup
+    #define ERR_LED_port  PORTB
+    #define ERR_LED_pin   PIN2_bm
+    #define DIAG_LED_port PORTB
+    #define DIAG_LED_pin  PIN1_bm
+    #define INFO_LED_port PORTB
+    #define INFO_LED_pin  PIN0_bm
+
+    // I2C Interface for display
+    #define LCD_PORT      PORTC
+    #define LCD_TWI       TWIC
+    #define LCD_SDA       PIN0_bm
+    #define LCD_SCL       PIN1_bm
+    #define LCD_CTRL      PIN0CTRL
+
 
 	/* Public Interface - May be used in end-application: */
 		/* Macros: */

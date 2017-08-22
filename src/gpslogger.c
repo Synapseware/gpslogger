@@ -3,9 +3,9 @@
 
 /** Lifecycle and USB flags */
 volatile int8_t		_secondsTick		= 0;
-volatile int8_t		_hostConnected		= 0;
+volatile int8_t		_hostConnected		= 1;
 volatile int32_t	_flashWriteAddr		= 0;
-
+volatile int		_serialData			= -1;
 
 /** NMEA processing data & flags */
 static bool			_hasFix				= false;
@@ -80,6 +80,33 @@ static void PrintFlush(void)
 		return;
 	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 }
+static void LCDPrintString_P(const char* str, int length)
+{
+	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
+	{
+		TWI_StopTransmission(&LCD_TWI);
+	}
+}
+static void LCDClear(void)
+{
+
+}
+
+
+/** Configures the CPU */
+static void ConfigureCPU(void)
+{
+	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
+	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
+	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
+
+	/* Start the 32MHz internal RC oscillator and start the DFLL to increase it to 48MHz using the USB SOF as a reference */
+	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
+	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
+
+	/* Enable lov, med and high level interrupts in the PMIC */
+	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
+}
 
 /** Configure timers */
 static void InitializeTimers(void)
@@ -91,13 +118,13 @@ static void InitializeTimers(void)
 
 		/* Set period/TOP value. */
 		TC_SetPeriod( &TCC0, F_CPU / 1024 );
-		TC_SetCompareA( &TCC0, 1 );
 
 		/* Setup interrupts for Compare/Capture A */
+		TC_SetCompareA( &TCC0, 1 );
 		TC0_SetCCAIntLevel( &TCC0, TC_CCAINTLVL_LO_gc );
 
 		/* Setup interrupts for Compare/Capture B */
-		TC_SetCompareB (&TCC0, 50 );
+		TC_SetCompareB (&TCC0, USB_DISCONN_DELAY );
 		TC0_SetCCBIntLevel( &TCC0, TC_CCBINTLVL_LO_gc );
 	}
 
@@ -107,8 +134,8 @@ static void InitializeTimers(void)
 		/* Select clock source */
 		TC1_ConfigClockSource( &TCC1, TC_CLKSEL_DIV256_gc );
 
-		/* F_CPU / 256 / 1250 = 100 */
-		TC_SetPeriod( &TCC1, F_CPU / 256 / 125 );
+		/* F_CPU / 256 / 2500 = 50Hz (or 20ms) */
+		TC_SetPeriod( &TCC1, USB_TIMER_PERIOD );
 
 		/* Setup interrupt for compare A */
 		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_MED_gc );
@@ -122,6 +149,132 @@ static void InitializeADC(void)
 	// Configure ADC
 }
 
+/** Configure the SPI interface */
+static void InitializeSPI(void)
+{
+	// reset the SPI device
+	SPI_DEVICE.CTRL = 0;
+	SPI_DEVICE.INTCTRL = 0;
+	SPI_DEVICE.STATUS = 0;
+
+	// Initialize the SPI device for the flash chip
+	SPI_Init(&SPI_DEVICE,
+		SPI_MODE_MASTER |
+		SPI_SPEED_FCPU_DIV_2 |
+		SPI_ORDER_MSB_FIRST |
+		SPI_SCK_LEAD_RISING |
+		SPI_SAMPLE_LEADING
+	);
+
+	// Initialize the FLASH driver
+	FlashDriver_Init(&SPI_DEVICE, &SPI_PORT, SPI_CS);
+}
+
+/** Configure hardware to support the LCD */
+static void InitializeLCD(void)
+{
+	ConfigureLCD();
+
+	// Initialize the TWI interface
+	TWI_Init(&LCD_TWI, TWI_BAUD_FROM_FREQ(LCD_BAUD));
+
+	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
+	{
+		TWI_SendByte(&LCD_TWI, ~LCD_BACKLIGHT_ON);
+
+		TWI_StopTransmission(&LCD_TWI);
+	}
+	else
+	{
+		TurnOnErrLed();
+		while(1){}
+	}
+}
+
+/** Poweroff the GPS */
+static void DisableGps(void)
+{
+	Adafruit_GPS_Suspend();
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_STANDBYOK) == 0);
+}
+
+/** Poweron the GPS after a poweroff */
+static void EnableGps(void)
+{	
+	TurnOnInfoLed();
+	Adafruit_GPS_Enable();
+	Adafruit_GPS_ResetState();
+
+	Adafruit_GPS_Wakeup();
+	Adafruit_GPS_ColdStart();
+
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_COMPLETE) == 0);
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_START) == 0);
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_AWAKE) == 0);
+
+	Adafruit_GPS_Update1Hz();
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_1HZ_OK) == 0);
+
+	Adafruit_GPS_RMCOnly();
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) == 0);
+	TurnOffInfoLed();
+}
+
+/** Configure the GPS hardware */
+static void InitializeGps(void)
+{
+	ConfigureGpsUart();
+	ConfigureGpsPins();
+
+	Adafruit_GPS_Init(&HandleLatestGpsMessage);
+
+	EnableGps();
+
+	TurnOnInfoLed();
+
+	Adafruit_GPS_ResetState();
+	Adafruit_GPS_AskForVersion();
+
+	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_VERSION) == 0);
+
+	TurnOffInfoLed();
+}
+
+/** Configures the board hardware and chip peripherals for the application's functionality. */
+void SetupHardware(void)
+{
+	// initialize variables
+	_secondsTick		= 0;
+	_hostConnected		= 0;
+	_flashWriteAddr		= 0;
+	_recordingTimeout	= 0;
+	_serialData			= -1;
+	_hasFix				= false;
+	_saveNmea			= false;
+	_allowedMisses		= GPS_FIX_MISSES;
+	memset(_nmea, 0, sizeof(_nmea));
+	memset(_gpsVersion, 0, sizeof(_gpsVersion));
+
+	ConfigureCPU();
+
+	// setup LEDs
+	ConfigureLeds();
+	TurnOffLeds();
+
+	/* Hardware Initialization */
+	USB_Init();
+
+	InitializeTimers();
+	InitializeADC();
+	InitializeSPI();
+	InitializeLCD();
+
+	// Prepare GPS module
+	InitializeGps();
+
+	// all done with setup - enable interrupts
+	GlobalInterruptEnable();
+}
 
 /** Finds the first free page in the dataflash chip */
 static int32_t FindFirstFreeAddress(void)
@@ -296,55 +449,6 @@ void HandleLatestGpsMessage(const char* message, int length)
 	}
 }
 
-/** Poweroff the GPS */
-static void DisableGps(void)
-{
-	Adafruit_GPS_Suspend();
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_STANDBYOK) == 0);
-}
-
-/** Poweron the GPS after a poweroff */
-static void EnableGps(void)
-{	
-	TurnOnInfoLed();
-	Adafruit_GPS_Enable();
-	Adafruit_GPS_ResetState();
-
-	Adafruit_GPS_Wakeup();
-	Adafruit_GPS_ColdStart();
-
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_COMPLETE) == 0);
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_START) == 0);
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_AWAKE) == 0);
-
-	Adafruit_GPS_Update1Hz();
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_1HZ_OK) == 0);
-
-	Adafruit_GPS_RMCOnly();
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) == 0);
-	TurnOffInfoLed();
-}
-
-/** Configure the GPS hardware */
-static void InitializeGps(void)
-{
-	ConfigureGpsUart();
-	ConfigureGpsPins();
-
-	Adafruit_GPS_Init(&HandleLatestGpsMessage);
-
-	EnableGps();
-
-	TurnOnInfoLed();
-
-	Adafruit_GPS_ResetState();
-	Adafruit_GPS_AskForVersion();
-
-	while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_VERSION) == 0);
-
-	TurnOffInfoLed();
-}
-
 /** Prints an initial greeting to the USB port */
 static void InitialGreeting(void)
 {
@@ -511,6 +615,13 @@ int main(void)
 	// Begin main loop
 	while(true)
 	{
+		// check for valid serial data
+		if (_serialData > -1)
+		{
+			HandleGpsSerialInterrupt(_serialData);
+			_serialData = -1;
+		}
+
 		if (_saveNmea)
 		{
 			// shutoff the GPS
@@ -547,7 +658,6 @@ int main(void)
 		}
 		_secondsTick = 0;
 
-
 		// 
 		// GPS recording timeout handling state processing
 		// 
@@ -583,11 +693,11 @@ int main(void)
 					}
 				}
 			}
-			
+
 			if (!_recordingTimeout)
 			{
 				// turn on the diag LED to indicate normal suspend
-				TurnOnDiagLed();
+				TurnOnErrLed();
 			}
 		}
 		else if (!_allowedMisses)
@@ -626,72 +736,6 @@ int main(void)
 	}
 }
 
-/** Configures the board hardware and chip peripherals for the application's functionality. */
-void SetupHardware(void)
-{
-	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
-	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
-	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
-
-	/* Start the 32MHz internal RC oscillator and start the DFLL to increase it to 48MHz using the USB SOF as a reference */
-	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
-	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
-
-	/* Enable lov, med and high level interrupts in the PMIC */
-	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
-
-	// initialize statics
-	_secondsTick		= 0;
-	_hostConnected		= 0;
-	_flashWriteAddr		= 0;
-	_recordingTimeout	= 0;
-	_hasFix				= false;
-	_saveNmea			= false;
-	_allowedMisses		= GPS_FIX_MISSES;
-	memset(_nmea, 0, sizeof(_nmea));
-	memset(_gpsVersion, 0, sizeof(_gpsVersion));
-
-	/* Hardware Initialization */
-	USB_Init();
-
-	// Initialize the timer(s)
-	InitializeTimers();
-	InitializeADC();
-
-	// setup LEDs
-	LED_PORT.OUTCLR = LED_PIN;
-	LED_PORT.DIRSET = LED_PIN;
-	TurnOffErrLed();
-	ERR_LED_port.DIRSET = ERR_LED_pin;
-	TurnOffDiagLed();
-	DIAG_LED_port.DIRSET = DIAG_LED_pin;
-	TurnOffInfoLed();
-	INFO_LED_port.DIRSET = INFO_LED_pin;
-
-	// Prepare GPS module
-	InitializeGps();
-
-	// reset the SPI device
-	SPI_DEVICE.CTRL = 0;
-	SPI_DEVICE.INTCTRL = 0;
-	SPI_DEVICE.STATUS = 0;
-
-	// Initialize the SPI device for the flash chip
-	SPI_Init(&SPI_DEVICE,
-		SPI_MODE_MASTER |
-		SPI_SPEED_FCPU_DIV_2 |
-		SPI_ORDER_MSB_FIRST |
-		SPI_SCK_LEAD_RISING |
-		SPI_SAMPLE_LEADING
-	);
-
-	// Initialize the FLASH driver
-	FlashDriver_Init(&SPI_DEVICE, &SPI_PORT, SPI_CS);
-
-	// all done with setup - enable interrupts
-	GlobalInterruptEnable();
-}
-
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
@@ -699,6 +743,8 @@ void EVENT_USB_Device_Connect(void)
 	//TurnOnDiagLed();
 
 	_hostConnected = 1;
+
+	TC_SetCompareB (&TCC0, USB_CONNECTED_DELAY);
 }
 
 /** Event handler for the library USB Disconnection event. */
@@ -708,15 +754,15 @@ void EVENT_USB_Device_Disconnect(void)
 	//TurnOffDiagLed();
 
 	_hostConnected = 0;
+
+	TC_SetCompareB (&TCC0, USB_DISCONN_DELAY);
 }
 
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
-	bool success = CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-	if (success)
-	{
-	}
+	// configure the CDC interface
+	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
 }
 
 /** Event handler for the library USB Control Request reception event. */
@@ -750,7 +796,7 @@ ISR(TCC0_CCA_vect)
 	// Turn the LED on
 	if (_hostConnected)
 	{
-		LED_PORT.OUTSET = LED_PIN;
+		TurnOnBuiltInLed();
 	}
 
 	// clear interrupt flag
@@ -761,7 +807,7 @@ ISR(TCC0_CCA_vect)
 ISR(TCC0_CCB_vect)
 {
 	// Turn the LED off
-	LED_PORT.OUTCLR = LED_PIN;
+	TurnOffBuiltInLed();
 
 	// clear interrupt flag
 	TCC0.INTFLAGS = TC0_CCBIF_bm;
@@ -771,7 +817,7 @@ ISR(TCC0_CCB_vect)
 ISR(TCC1_CCA_vect)
 {
 	/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
-	//CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+	CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
 	//CDC_ProcessControlStateChange();
 
@@ -783,17 +829,10 @@ ISR(TCC1_CCA_vect)
 	TCC1.INTFLAGS = TC1_CCAIF_bm;
 }
 
-/** RTC Overflow.  Just sleep */
-ISR(RTC_OVF_vect)
-{
-
-	// TODO: 
-}
-
 /** GPS USART Receive interrupt handler */
 ISR(USARTE0_RXC_vect)
 {
 	char data = GPS_UART.DATA;
 
-	HandleGpsSerialInterrupt(data);
+	_serialData = data;
 }
