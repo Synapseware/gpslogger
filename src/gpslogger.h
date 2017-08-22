@@ -28,12 +28,17 @@
 
 
 // USB configuration
-#define USB_TIMER_MS_DELAY	100
+#define USB_TIMER_MS_DELAY	50
 #define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
+#define USB_CONNECTED_DELAY	100
+#define USB_DISCONN_DELAY	15625
 
+// GPS constants
+#define GPS_INTERVAL	120
+#define GPS_TIMEOUT		60
+#define GPS_FIX_MISSES	5
 
-/* Function Prototypes: */
-void SetupHardware(void);
+void HandleLatestGpsMessage(const char* message, int length);
 
 void CDC_ProcessControlStateChange(void);
 void EVENT_USB_Device_Connect(void);
