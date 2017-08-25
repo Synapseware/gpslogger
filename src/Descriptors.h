@@ -56,7 +56,7 @@
 		#define CDC_NOTIFICATION_EPSIZE        8
 
 		/** Size in bytes of the CDC data IN and OUT endpoints. */
-		#define CDC_TXRX_EPSIZE                16
+		#define CDC_TXRX_EPSIZE                64
 
 	/* Type Defines: */
 		/** Type define for the device configuration descriptor structure. This must be defined in the
@@ -101,6 +101,11 @@
 			STRING_ID_Product      = 2, /**< Product string ID */
 		};
 
+	/* Function Prototypes: */
+		uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
+		                                    const uint16_t wIndex,
+		                                    const void** const DescriptorAddress)
+		                                    ATTR_WARN_UNUSED_RESULT ATTR_NON_NULL_PTR_ARG(3);
 
 #endif
 

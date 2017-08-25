@@ -16,6 +16,9 @@ static int			_recordingTimeout	= 0;
 static int			_gpsFixTimeout		= GPS_TIMEOUT;
 static uint8_t		_allowedMisses		= GPS_FIX_MISSES;
 
+/** LCD variables */
+static uint8_t		_lcdState			= 0;
+
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
  *  passed to all CDC Class driver functions, so that multiple instances of the same class
@@ -80,32 +83,95 @@ static void PrintFlush(void)
 		return;
 	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 }
-static void LCDPrintString_P(const char* str, int length)
+static void LCDPrintString_P(const char* str)
 {
 	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
 	{
+		char nibble;
+		while (true)
+		{
+			char data = pgm_read_byte(str++);
+			if (!data)
+				break;
+
+			// high nibble first
+			nibble =	(data & LCD_DATA_MASK) |
+						(_lcdState & LCD_STATE_MASK) |
+						LCD_WRITE_ENABLE;
+			TWI_SendByte(&LCD_TWI, nibble);
+
+			// low nibble last
+			nibble =	(data << 4) |
+						(_lcdState & LCD_STATE_MASK) |
+						LCD_WRITE_ENABLE;
+			TWI_SendByte(&LCD_TWI, nibble);
+		}
+
 		TWI_StopTransmission(&LCD_TWI);
 	}
 }
-static void LCDClear(void)
-{
 
+static uint8_t HD44780_ReadState(void)
+{
+	uint8_t state;
+	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_READ, 100) == TWI_ERROR_NoError)
+	{
+		TWI_ReceiveByte(&LCD_TWI, &state, true);
+		TWI_StopTransmission(&LCD_TWI);
+	}
+
+	_lcdState = state & LCD_STATE_MASK;
+
+	return _lcdState;
 }
 
-
-/** Configures the CPU */
-static void ConfigureCPU(void)
+static void HD44780_Clear(void)
 {
-	/* Start the PLL to multiply the 2MHz RC oscillator to 32MHz and switch the CPU core to run from it */
-	XMEGACLK_StartPLL(CLOCK_SRC_INT_RC2MHZ, 2000000, F_CPU);
-	XMEGACLK_SetCPUClockSource(CLOCK_SRC_PLL);
+	uint8_t data =	(CMD_DISPLAY_CLR << LCD_COMMAND_SHIFT) |
+					LCD_WRITE_COMMAND |
+					_lcdState;
 
-	/* Start the 32MHz internal RC oscillator and start the DFLL to increase it to 48MHz using the USB SOF as a reference */
-	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
-	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
+	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
+	{
+		TWI_SendByte(&LCD_TWI, data);
+		TWI_StopTransmission(&LCD_TWI);
+	}
+}
 
-	/* Enable lov, med and high level interrupts in the PMIC */
-	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
+static void HD44780_BacklightOn(void)
+{
+	if (_lcdState & LCD_BACKLIGHT)
+	{
+		// nothing to do - backlight is already on
+		return;
+	}
+
+	// set the backlight flag
+	_lcdState |= LCD_BACKLIGHT;
+
+	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
+	{
+		TWI_SendByte(&LCD_TWI, LCD_BACKLIGHT);
+		TWI_StopTransmission(&LCD_TWI);
+	}
+}
+
+static void HD44780_BacklightOff(void)
+{
+	if (!(_lcdState & LCD_BACKLIGHT))
+	{
+		// nothing to do - backlight is already on
+		return;
+	}
+
+	// clear the backlight flag
+	_lcdState &= ~LCD_BACKLIGHT;
+
+	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
+	{
+		TWI_SendByte(&LCD_TWI, 0);
+		TWI_StopTransmission(&LCD_TWI);
+	}
 }
 
 /** Configures the CPU */
@@ -193,17 +259,11 @@ static void InitializeLCD(void)
 	// Initialize the TWI interface
 	TWI_Init(&LCD_TWI, TWI_BAUD_FROM_FREQ(LCD_BAUD));
 
-	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
-	{
-		TWI_SendByte(&LCD_TWI, ~LCD_BACKLIGHT_ON);
+	HD44780_ReadState();
+	HD44780_Clear();
+	HD44780_BacklightOn();
 
-		TWI_StopTransmission(&LCD_TWI);
-	}
-	else
-	{
-		TurnOnErrLed();
-		while(1){}
-	}
+	LCDPrintString_P(PSTR("GPS Logger"));
 }
 
 /** Poweroff the GPS */
@@ -279,13 +339,14 @@ void SetupHardware(void)
 	/* Hardware Initialization */
 	USB_Init();
 
+	// Initialize peripherals
 	InitializeTimers();
-	InitializeADC();
-	InitializeSPI();
-	InitializeLCD();
+	//InitializeLCD();
+	//InitializeADC();
+	//InitializeSPI();
 
 	// Prepare GPS module
-	InitializeGps();
+	//InitializeGps();
 
 	// all done with setup - enable interrupts
 	GlobalInterruptEnable();
@@ -300,7 +361,7 @@ static int32_t FindFirstFreeAddress(void)
 	}
 
 	TurnOffErrLed();
-	TurnOnDiagLed();
+	TurnOnInfoLed();
 
 	int32_t address = 0;
 	int32_t freefrom = -1;
@@ -332,7 +393,7 @@ static int32_t FindFirstFreeAddress(void)
 	}
 	end_read(SPI_CS);
 
-	TurnOffDiagLed();
+	TurnOffInfoLed();
 
 	return freefrom;
 }
@@ -357,7 +418,7 @@ static bool SaveNMEA(void)
 
 	global_unprotect(SPI_CS);
 
-	TurnOnDiagLed();
+	TurnOnInfoLed();
 
 	// write latest message to flash
 	int idx = 0;
@@ -384,7 +445,7 @@ static bool SaveNMEA(void)
 	end_write(SPI_CS);
 	while(is_write_enabled(SPI_CS));
 
-	TurnOffDiagLed();
+	TurnOffInfoLed();
 
 	GlobalInterruptEnable();
 
@@ -518,6 +579,7 @@ static void InitialGreeting(void)
 
 	sprintf_P(msg, PSTR("  Flash start address: %u\r\n"), _flashWriteAddr);
 	PrintString(msg);
+	/*
 	PrintString_P(PSTR("  Contents:\r\n"));
 
 	begin_read(SPI_CS, 0);
@@ -530,6 +592,7 @@ static void InitialGreeting(void)
 		PrintChar(data);
 	}
 	end_read(SPI_CS);
+	*/
 
 	PrintString_P(PSTR("\r\n"));
 	PrintFlush();
@@ -628,8 +691,27 @@ int main(void)
 	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
 	// Begin main loop
+	uint8_t time = 0;
 	while(true)
 	{
+		/* Required calls */
+		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+		USB_USBTask();
+
+		if (!_secondsTick)
+			continue;
+		_secondsTick = 0;
+
+		time++;
+		sprintf_P(msg, PSTR("Time: %u\r\n"), time);
+		PrintString(msg);
+		PrintFlush();
+	}
+
+	while(true)
+	{
+		continue;
+
 		// check for valid serial data
 		if (_serialData > -1)
 		{
@@ -668,9 +750,7 @@ int main(void)
 
 		// only main-loop code below this point
 		if (!_secondsTick)
-		{
 			continue;
-		}
 		_secondsTick = 0;
 
 		// 
@@ -727,13 +807,13 @@ int main(void)
 
 			// turn off the fix error status LED
 			TurnOffErrLed();
-			TurnOffDiagLed();
+			TurnOffInfoLed();
 		}
-
 
 		// reset the host-connected delay
 		if (!_hostConnected)
 		{
+			// restart the delay
 			delay = 3;
 		}
 		else
@@ -751,35 +831,6 @@ int main(void)
 	}
 }
 
-/** Event handler for the library USB Connection event. */
-void EVENT_USB_Device_Connect(void)
-{
-	// turn on the diag LED
-	//TurnOnDiagLed();
-
-	_hostConnected = 1;
-
-	TC_SetCompareB (&TCC0, USB_CONNECTED_DELAY);
-}
-
-/** Event handler for the library USB Disconnection event. */
-void EVENT_USB_Device_Disconnect(void)
-{
-	// turn off the diag LED
-	//TurnOffDiagLed();
-
-	_hostConnected = 0;
-
-	TC_SetCompareB (&TCC0, USB_DISCONN_DELAY);
-}
-
-/** Event handler for the library USB Configuration Changed event. */
-void EVENT_USB_Device_ConfigurationChanged(void)
-{
-	// configure the CDC interface
-	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-}
-
 /** Event handler for the library USB Control Request reception event. */
 void EVENT_USB_Device_ControlRequest(void)
 {
@@ -787,20 +838,12 @@ void EVENT_USB_Device_ControlRequest(void)
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
-/** Process control line signals */
-void CDC_ProcessControlStateChange(void)
+/** Event handler for the library USB Configuration Changed event. */
+void EVENT_USB_Device_ConfigurationChanged(void)
 {
-	/* Device must be connected and configured for the task to run */
-	if (USB_DeviceState != DEVICE_STATE_Configured)
-	{
-		return;
-	}
-
-	if (_hostConnected)
-	{
-		VirtualSerial_CDC_Interface.State.ControlLineStates.DeviceToHost |= (CDC_CONTROL_LINE_IN_DSR | CDC_CONTROL_LINE_IN_DCD);
-		CDC_Device_SendControlLineStateChange(&VirtualSerial_CDC_Interface);
-	}
+	// configure the CDC interface
+	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
+	_hostConnected = 1;
 }
 
 /** Interrupt handler for TCC0 Compare/Capture A */
@@ -832,13 +875,9 @@ ISR(TCC0_CCB_vect)
 ISR(TCC1_CCA_vect)
 {
 	/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
-	CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+	//CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 
 	//CDC_ProcessControlStateChange();
-
-	/* Required calls */
-	CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
-	USB_USBTask();
 
 	// clear interrupt flag
 	TCC1.INTFLAGS = TC1_CCAIF_bm;

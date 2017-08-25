@@ -43,11 +43,11 @@
 		#include <avr/power.h>
 
 	/* Macros: */
-		#define RS                  (1 << 4)    /* PD4 */
-		#define ENABLE              (1 << 7)    /* PD7 */
+		#define RS                  (1 << 4)
+		#define ENABLE              (1 << 7)
 
 		#define HI4_MASK            0xF0
-		#define LO4_MASK            0x0F        /* PD0-PD3 */
+		#define LO4_MASK            0x0F
 
 		#define ALL_BITS            (RS | ENABLE | LO4_MASK)
 
@@ -66,8 +66,19 @@
     #define LCD_PIN_D6          6
     #define LCD_PIN_D7          7
 
-    #define LCD_BACKLIGHT_ON    (1<<LCD_PIN_LIGHT)
-    #define LCD_BACKLIGHT_OFF   (0)
+    #define LCD_WRITE_COMMAND   (1<<LCD_PIN_RS)
+    #define LCD_WRITE_ENABLE    (1<<LCD_PIN_RW)
+    #define LCD_ENABLE          (1<<LCD_PIN_EN)
+    #define LCD_BACKLIGHT       (1<<LCD_PIN_LIGHT)
+    #define LCD_DATA_0          (1<<LCD_PIN_D4)
+    #define LCD_DATA_1          (1<<LCD_PIN_D5)
+    #define LCD_DATA_2          (1<<LCD_PIN_D6)
+    #define LCD_DATA_3          (1<<LCD_PIN_D7)
+
+    #define LCD_STATE_MASK      0x0F
+    #define LCD_DATA_MASK       0xF0
+
+    #define LCD_COMMAND_SHIFT   4
 
 	/* Function Prototypes: */
 		void HD44780_Initialize(void);
