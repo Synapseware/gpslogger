@@ -23,14 +23,13 @@
 #include "Drivers/AdafruitGps.h"
 #include "Drivers/TC_driver.h"
 #include "Drivers/at25df321.h"
-#include "Drivers/rtc_driver.h"
+//#include "Drivers/rtc_driver.h"
 #include "Drivers/hd44780_twi.h"
 #include "Descriptors.h"
 #include "NMEAParser.h"
 
 // USB configuration
-#define USB_TIMER_MS_DELAY	50
-#define USB_TIMER_PERIOD	(F_CPU / 256 / USB_TIMER_MS_DELAY)
+#define USB_TIMER_PERIOD	(F_CPU / 256 / 125)
 #define USB_CONNECTED_DELAY	5000
 #define USB_DISCONN_DELAY	15625
 
@@ -46,11 +45,11 @@
 
 void HandleLatestGpsMessage(const char* message, int length);
 
-void EVENT_USB_Device_ControlRequest(void);
+void EVENT_USB_Device_Connect(void);
+void EVENT_USB_Device_Disconnect(void);
 void EVENT_USB_Device_ConfigurationChanged(void);
-//void CDC_ProcessControlStateChange(void);
-//void EVENT_USB_Device_Connect(void);
-//void EVENT_USB_Device_Disconnect(void);
+void EVENT_USB_Device_ControlRequest(void);
+
 
 
 #endif

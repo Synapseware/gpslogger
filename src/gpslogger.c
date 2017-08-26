@@ -5,7 +5,7 @@
 volatile int8_t		_secondsTick		= 0;
 volatile int8_t		_hostConnected		= 1;
 volatile int32_t	_flashWriteAddr		= 0;
-volatile int		_serialData			= -1;
+volatile int		_gpsData			= -1;
 
 /** NMEA processing data & flags */
 static bool			_hasFix				= false;
@@ -25,30 +25,30 @@ static uint8_t		_lcdState			= 0;
  *  within a device can be differentiated from one another.
  */
 USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
-{
-	.Config =
 	{
-		.ControlInterfaceNumber	= INTERFACE_ID_CDC_CCI,
-		.DataINEndpoint       	=
-		{
-			.Address          	= CDC_TX_EPADDR,
-			.Size             	= CDC_TXRX_EPSIZE,
-			.Banks            	= 1,
-		},
-		.DataOUTEndpoint =
-		{
-			.Address          	= CDC_RX_EPADDR,
-			.Size             	= CDC_TXRX_EPSIZE,
-			.Banks            	= 1,
-		},
-		.NotificationEndpoint =
-		{
-			.Address          	= CDC_NOTIFICATION_EPADDR,
-			.Size             	= CDC_NOTIFICATION_EPSIZE,
-			.Banks            	= 1,
-		},
-	},
-};
+		.Config =
+			{
+				.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
+				.DataINEndpoint           =
+					{
+						.Address          = CDC_TX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.DataOUTEndpoint =
+					{
+						.Address          = CDC_RX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.NotificationEndpoint =
+					{
+						.Address          = CDC_NOTIFICATION_EPADDR,
+						.Size             = CDC_NOTIFICATION_EPSIZE,
+						.Banks            = 1,
+					},
+			},
+	};
 
 
 /** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
@@ -185,7 +185,7 @@ static void ConfigureCPU(void)
 	XMEGACLK_StartInternalOscillator(CLOCK_SRC_INT_RC32MHZ);
 	XMEGACLK_StartDFLL(CLOCK_SRC_INT_RC32MHZ, DFLL_REF_INT_USBSOF, F_USB);
 
-	/* Enable lov, med and high level interrupts in the PMIC */
+	/* Enable low, med, and high level interrupts in the PMIC */
 	PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
 }
 
@@ -215,8 +215,8 @@ static void InitializeTimers(void)
 		/* Select clock source */
 		TC1_ConfigClockSource( &TCC1, TC_CLKSEL_DIV256_gc );
 
-		/* F_CPU / 256 / 2500 = 50Hz (or 20ms) */
-		TC_SetPeriod( &TCC1, USB_TIMER_PERIOD );
+		/* F_CPU / 256 / 125 = 1000Hz (or 1ms) */
+		TC_SetPeriod( &TCC1, 125 );
 
 		/* Setup interrupt for compare A */
 		TC1_SetCCAIntLevel( &TCC1, TC_CCAINTLVL_MED_gc );
@@ -323,7 +323,7 @@ void SetupHardware(void)
 	_hostConnected		= 0;
 	_flashWriteAddr		= 0;
 	_recordingTimeout	= 0;
-	_serialData			= -1;
+	_gpsData			= -1;
 	_hasFix				= false;
 	_saveNmea			= false;
 	_allowedMisses		= GPS_FIX_MISSES;
@@ -341,12 +341,12 @@ void SetupHardware(void)
 
 	// Initialize peripherals
 	InitializeTimers();
-	//InitializeLCD();
-	//InitializeADC();
-	//InitializeSPI();
+	InitializeLCD();
+	InitializeADC();
+	InitializeSPI();
 
 	// Prepare GPS module
-	//InitializeGps();
+	InitializeGps();
 
 	// all done with setup - enable interrupts
 	GlobalInterruptEnable();
@@ -539,15 +539,12 @@ static void InitialGreeting(void)
 	PrintString_P(PSTR("\r\n"));
 
 	PrintString_P(PSTR("Flash info:\r\n"));
-
 	PrintString_P(PSTR("  Valid: "));
-	TurnOnErrLed();
 	if (is_valid(SPI_CS))
 		PrintString_P(PSTR("Y"));
 	else
 		PrintString_P(PSTR("N"));	
 	PrintString_P(PSTR("\r\n"));
-	TurnOffErrLed();
 
 	{
 		/*
@@ -569,7 +566,6 @@ static void InitialGreeting(void)
 	}
 
 	PrintString_P(PSTR("  Searching for free start address...\r\n"));
-
 	_flashWriteAddr = FindFirstFreeAddress();
 	if (_flashWriteAddr < 0)
 	{
@@ -580,6 +576,7 @@ static void InitialGreeting(void)
 	sprintf_P(msg, PSTR("  Flash start address: %u\r\n"), _flashWriteAddr);
 	PrintString(msg);
 	/*
+	*/
 	PrintString_P(PSTR("  Contents:\r\n"));
 
 	begin_read(SPI_CS, 0);
@@ -592,7 +589,6 @@ static void InitialGreeting(void)
 		PrintChar(data);
 	}
 	end_read(SPI_CS);
-	*/
 
 	PrintString_P(PSTR("\r\n"));
 	PrintFlush();
@@ -681,20 +677,17 @@ void GpsMenu(void)
  */
 int main(void)
 {
-	int delay = 3;
+	uint8_t delay = 1;
 	char msg[160];
 
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
-	//CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
-	CDC_Device_CreateBlockingStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
+	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
-	// Begin main loop
-	uint8_t time = 0;
 	while(true)
 	{
-		/* Required calls */
+		// USB tasks
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 
@@ -702,23 +695,48 @@ int main(void)
 			continue;
 		_secondsTick = 0;
 
-		time++;
-		sprintf_P(msg, PSTR("Time: %u\r\n"), time);
-		PrintString(msg);
-		PrintFlush();
+		if (delay && _hostConnected)
+		{
+			delay = 0;
+			InitialGreeting();
+		}
 	}
+
 
 	while(true)
 	{
+		// USB tasks
+		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+		USB_USBTask();
+
+		// reset the host-connected delay
+		if (_hostConnected)
+		{
+			// send greeting if we've hit our host-timeout and the host is connected
+			if (delay)
+			{
+				TurnOnDiagLed();
+
+				delay = 0;
+				InitialGreeting();
+			}
+		}
+		else
+		{
+			// restart the delay
+			delay = 1;
+		}
+
 		continue;
 
 		// check for valid serial data
-		if (_serialData > -1)
+		if (_gpsData > -1)
 		{
-			HandleGpsSerialInterrupt(_serialData);
-			_serialData = -1;
+			HandleGpsSerialInterrupt(_gpsData);
+			_gpsData = -1;
 		}
 
+		// save the latest NMEA sentence
 		if (_saveNmea)
 		{
 			// shutoff the GPS
@@ -809,41 +827,37 @@ int main(void)
 			TurnOffErrLed();
 			TurnOffInfoLed();
 		}
-
-		// reset the host-connected delay
-		if (!_hostConnected)
-		{
-			// restart the delay
-			delay = 3;
-		}
-		else
-		{
-			// send greeting if we've hit our host-timeout and the host is connected
-			if (delay)
-			{
-				delay--;
-				if (!delay)
-				{
-					InitialGreeting();
-				}
-			}
-		}
 	}
 }
 
-/** Event handler for the library USB Control Request reception event. */
-void EVENT_USB_Device_ControlRequest(void)
+void EVENT_USB_Device_Connect(void)
 {
-	// pass the config data to the processor
-	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
+	// No-Op
+
+}
+
+void EVENT_USB_Device_Disconnect(void)
+{
+	// No-Op
+
 }
 
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
 	// configure the CDC interface
-	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-	_hostConnected = 1;
+	bool ConfigSuccess = CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
+	if (ConfigSuccess)
+	{
+		_hostConnected = 1;
+	}
+}
+
+/** Event handler for the library USB Control Request reception event. */
+void EVENT_USB_Device_ControlRequest(void)
+{
+	// 
+	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
 }
 
 /** Interrupt handler for TCC0 Compare/Capture A */
@@ -874,10 +888,7 @@ ISR(TCC0_CCB_vect)
 /** Interrupt handler for TCC1 Compare/Capture A */
 ISR(TCC1_CCA_vect)
 {
-	/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
-	//CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-
-	//CDC_ProcessControlStateChange();
+	ERR_LED_port.OUTTGL = ERR_LED_pin;
 
 	// clear interrupt flag
 	TCC1.INTFLAGS = TC1_CCAIF_bm;
@@ -888,5 +899,5 @@ ISR(USARTE0_RXC_vect)
 {
 	char data = GPS_UART.DATA;
 
-	_serialData = data;
+	_gpsData = data;
 }

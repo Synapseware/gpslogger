@@ -1,14 +1,13 @@
 /*
              LUFA Library
-     Copyright (C) Dean Camera, 2014.
+     Copyright (C) Dean Camera, 2017.
 
   dean [at] fourwalledcubicle [dot] com
            www.lufa-lib.org
 */
 
 /*
-  Copyright 2014  Dean Camera (dean [at] fourwalledcubicle [dot] com)
-  Copyright 2012  Simon Foster (simon.foster [at] inbox [dot] com)
+  Copyright 2017  Dean Camera (dean [at] fourwalledcubicle [dot] com)
 
   Permission to use, copy, modify, distribute, and sell this
   software and its documentation for any purpose is hereby granted
@@ -56,7 +55,7 @@
 		#define CDC_NOTIFICATION_EPSIZE        8
 
 		/** Size in bytes of the CDC data IN and OUT endpoints. */
-		#define CDC_TXRX_EPSIZE                64
+		#define CDC_TXRX_EPSIZE                16
 
 	/* Type Defines: */
 		/** Type define for the device configuration descriptor structure. This must be defined in the
@@ -67,7 +66,7 @@
 		{
 			USB_Descriptor_Configuration_Header_t    Config;
 
-			// CDC Command Interface
+			// CDC Control Interface
 			USB_Descriptor_Interface_t               CDC_CCI_Interface;
 			USB_CDC_Descriptor_FunctionalHeader_t    CDC_Functional_Header;
 			USB_CDC_Descriptor_FunctionalACM_t       CDC_Functional_ACM;
