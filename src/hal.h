@@ -21,16 +21,22 @@
 // microcontroller
 static inline void ConfigureGpsPins(void)
 {
-	// set the GPS enable pin to output
-	GPS_EN_port.DIRSET = GPS_EN_pin;
-
-	// setup the FIX pin as input from the GPS
-	GPS_FIX_port.DIRCLR = GPS_FIX_pin;
-
 	// intialize the GPS IO pins
-	GPS_UART_port.DIRSET = GPS_TX_pin;
-	GPS_UART_port.OUTSET = GPS_TX_pin;
-	GPS_UART_port.DIRCLR = GPS_RX_pin;
+	GPS_port.OUTSET = (GPS_TX_pin | GPS_RX_pin | GPS_EN_pin | GPS_FIX_pin);
+
+	// enable pullups
+	PORTCFG.MPCMASK = (GPS_TX_pin | GPS_RX_pin | GPS_EN_pin);
+	GPS_port.PIN2CTRL = PORT_OPC_WIREDANDPULL_gc;
+
+	// enable pulldown on FIX pin (active high)
+	GPS_port.PIN5CTRL = PORT_OPC_WIREDORPULL_gc;
+
+	// set direction bits
+	GPS_port.DIRSET = (GPS_TX_pin | GPS_EN_pin);
+	GPS_port.DIRCLR = (GPS_FIX_pin | GPS_RX_pin);
+
+	// configure the ADC pins (battery input and AREF)
+	GPS_BAT_port.DIRCLR = GPS_BAT_pin | PIN0_bm;
 }
 
 
@@ -69,7 +75,7 @@ static inline void EnableGpsModule(void)
 	// Setting the EN pin on the GPS module to high enables the GPS
 	// module.  The module must cold-start unless the backup battery
 	// is installed.
-	GPS_EN_port.OUTSET = GPS_EN_pin;
+	GPS_port.OUTSET = GPS_EN_pin;
 }
 
 
@@ -80,7 +86,7 @@ static inline void DisableGpsModule(void)
 	// Clears the EN pin.  This forces the GPS module into standby mode.
 	// The module must cold-start unless the backup battery
 	// is installed.
-	GPS_EN_port.OUTCLR = GPS_EN_pin;	
+	GPS_port.OUTCLR = GPS_EN_pin;	
 }
 
 
@@ -98,7 +104,7 @@ static inline void WriteToGpsUart_P(const char* data)
 static inline void WaitForFixLineLow(void)
 {
 	// wait for FIX line to go low
-	while ((GPS_FIX_port.IN & GPS_FIX_pin) != 0)
+	while ((GPS_port.IN & GPS_FIX_pin) != 0)
 	{}
 }
 

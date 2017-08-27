@@ -32,7 +32,7 @@ SRC				= $(TARGET).c \
 				$(LUFA_SRC_TWI)
 LUFA_PATH		= ../LUFA
 CC_FLAGS		= -DUSE_LUFA_CONFIG_HEADER -IConfig/
-LD_FLAGS		= 
+LD_FLAGS		= -Wl,-u,vfprintf -lprintf_flt
 
 # Default target
 all:

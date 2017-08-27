@@ -59,14 +59,15 @@
 
 
     // GPS
-    #define GPS_UART_port PORTE
+    #define GPS_UART      USARTD0
+    #define GPS_port      PORTD
     #define GPS_RX_pin    PIN2_bm
     #define GPS_TX_pin    PIN3_bm
-    #define GPS_UART      USARTE0
-    #define GPS_EN_port   PORTC
-    #define GPS_EN_pin    PIN3_bm
-    #define GPS_FIX_port  PORTD
+    #define GPS_EN_pin    PIN4_bm
     #define GPS_FIX_pin   PIN5_bm
+    #define GPS_UART_ISR  USARTD0_RXC_vect
+    #define GPS_BAT_port  PORTA
+    #define GPS_BAT_pin   PIN1_bm
 
     // Flash device
     #define SPI_DEVICE    SPIC

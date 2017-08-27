@@ -3,9 +3,13 @@
 
 /** Lifecycle and USB flags */
 volatile int8_t		_secondsTick		= 0;
-volatile int8_t		_hostConnected		= 1;
+volatile bool		_hostConnected		= false;
+volatile bool		_hostConfigured		= false;
 volatile int32_t	_flashWriteAddr		= 0;
 volatile int		_gpsData			= -1;
+
+volatile uint16_t	_gpsBattery			= 0;
+volatile uint16_t	_adcaCal			= 0;
 
 /** NMEA processing data & flags */
 static bool			_hasFix				= false;
@@ -15,6 +19,7 @@ static char			_gpsVersion[96];
 static int			_recordingTimeout	= 0;
 static int			_gpsFixTimeout		= GPS_TIMEOUT;
 static uint8_t		_allowedMisses		= GPS_FIX_MISSES;
+static char			_buffer[256];
 
 /** LCD variables */
 static uint8_t		_lcdState			= 0;
@@ -61,6 +66,8 @@ static void PrintString_P(const char* message)
 	if (!_hostConnected || NULL == message)
 		return;
 
+	//CDC_Device_SendString_P(&VirtualSerial_CDC_Interface, message);
+	//CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 	fputs_P(message, &USBSerialStream);
 }
 static void PrintString(const char* message)
@@ -68,6 +75,8 @@ static void PrintString(const char* message)
 	if (!_hostConnected || NULL == message)
 		return;
 
+	//CDC_Device_SendString(&VirtualSerial_CDC_Interface, message);
+	//CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 	fputs(message, &USBSerialStream);
 }
 static void PrintChar(char data)
@@ -226,8 +235,50 @@ static void InitializeTimers(void)
 /** Configure the ADC to read the GPS backup battery voltage */
 static void InitializeADC(void)
 {
-
 	// Configure ADC
+	// The ADC reads the GPS backup battery voltage by
+	// sampling the output of 2 47k resistors (divide by 2).
+	// Leakage current through the voltage divider is
+	// I = V/R
+	// I = 3.6/(47k*2)
+	// I = 38.3uA
+
+	// get the ADCA calibration data from ADCACAL0 and ADCACAL1
+	// NVM_CMD_READ_CALIB_ROW_gc
+	NVM.CMD = NVM_CMD_READ_CALIB_ROW_gc;
+	ADCA.CALL = pgm_read_byte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL0));
+	ADCA.CALH = pgm_read_byte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL1));
+	NVM.CMD = 0;
+	
+	// disable the ADC
+	ADCA.CTRLA = 0;
+
+	// Configure for Freerunning, 12-bit
+	ADCA.CTRLB = ADC_CURRLIMIT_HIGH_gc |
+				 ADC_RESOLUTION_12BIT_gc;
+
+	// Configure with external Vref @ PORT A0
+	ADCA.REFCTRL = ADC_REFSEL_AREFA_gc;
+
+	// Don't use events
+	ADCA.EVCTRL = 0;
+
+	// Configure prescaler with CLKpre/512
+	ADCA.PRESCALER = ADC_PRESCALER_DIV512_gc;
+
+	// Configure ADC for 1x gain and single-ended input
+	ADCA.CH1.CTRL = ADC_CH_GAIN_1X_gc |
+					ADC_CH_INPUTMODE_SINGLEENDED_gc;
+
+	// Select the ADC channel
+	ADCA.CH1.MUXCTRL = ADC_CH_MUXPOS_PIN1_gc;
+
+	// No interrupts (for now)
+	ADCA.CH1.INTCTRL = ADC_CH_INTMODE_COMPLETE_gc |
+					   ADC_CH_INTLVL_LO_gc;
+
+	// Enable the ADC
+	ADCA.CTRLA = ADC_ENABLE_bm;
 }
 
 /** Configure the SPI interface */
@@ -305,14 +356,9 @@ static void InitializeGps(void)
 
 	EnableGps();
 
-	TurnOnInfoLed();
-
-	Adafruit_GPS_ResetState();
 	Adafruit_GPS_AskForVersion();
 
 	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_VERSION) == 0);
-
-	TurnOffInfoLed();
 }
 
 /** Configures the board hardware and chip peripherals for the application's functionality. */
@@ -320,7 +366,8 @@ void SetupHardware(void)
 {
 	// initialize variables
 	_secondsTick		= 0;
-	_hostConnected		= 0;
+	_hostConnected		= false;
+	_hostConfigured		= false;
 	_flashWriteAddr		= 0;
 	_recordingTimeout	= 0;
 	_gpsData			= -1;
@@ -398,9 +445,29 @@ static int32_t FindFirstFreeAddress(void)
 	return freefrom;
 }
 
+/** Maps the raw ADC sample to a voltage value */
+static double ConvertBatteryVoltage(uint16_t sample)
+{
+	// Input range is 12-bit
+	// Voltage range is 0.0 to 3.0v
+	// ADC input is VBatt/2
+	// ADC transfer function is:
+	// RES = ((VINP-VINN)/VREF)*GAIN*(TOP+1)
+	// Map transfer function is:
+	// VIN = (RES/TOP+1)*VREF
+	// VIN = (sample/4096)*3.3
+
+	// instead of multiplying by 3.3, substracting a constant
+	// and then doubling to recover from the voltage divider,
+	// just multiply by 5.191
+	return (sample/4096.0) * 5.191;
+}
+
 /** Saves the latest NMEA logging data to the flash */
 static bool SaveNMEA(void)
 {
+	char msg[64];
+
 	// make sure our string is NULL terminated
 	int sentenceLength = strlen(_nmea);
 	if (_flashWriteAddr < 0 || sentenceLength >= sizeof(_nmea))
@@ -414,9 +481,16 @@ static bool SaveNMEA(void)
 		return false;
 	}
 
-	GlobalInterruptDisable();
+	// shutoff the GPS
+	PrintString_P(PSTR("Suspending GPS module.\r\n"));
+	DisableGps();
 
-	global_unprotect(SPI_CS);
+	PrintString_P(PSTR("Saving NMEA sentence:\r\n"));
+	PrintString(_nmea);
+
+	PrintString_P(PSTR("  address before: "));
+	sprintf_P(msg, PSTR("%u\r\n"), _flashWriteAddr);
+	PrintString(msg);
 
 	TurnOnInfoLed();
 
@@ -447,8 +521,6 @@ static bool SaveNMEA(void)
 
 	TurnOffInfoLed();
 
-	GlobalInterruptEnable();
-
 	return true;
 }
 
@@ -457,12 +529,6 @@ This method is run from the UART RX interrupt */
 void HandleLatestGpsMessage(const char* message, int length)
 {
 	char cmd_buff[16];
-
-	// don't process anything if we are saving the last message
-	if (_saveNmea)
-	{
-		return;
-	}
 
 	// make sure we have a valid sentence
 	if (length < 5 || NULL == message || '$' != message[0])
@@ -484,16 +550,6 @@ void HandleLatestGpsMessage(const char* message, int length)
 		// 				$GPRMC,043301.000,A,4802.9906,N,12249.8940,W,0.54,0.00,301115,,,A*7E
 
 		char* p = strchr(message, ',') + 1;
-
-		/*
-		float timef = atof(p);
-		uint32_t time = timef;
-		int hour = time / 10000;
-		int minute = (time % 10000) / 100;
-		int seconds = (time % 100);
-		int milliseconds = fmod(timef, 1.0) * 1000;
-		*/
-
 		p = strchr(p, ',') + 1;
 
 		// check for an A (active) character which indicate a valid GPS satellite fix
@@ -504,7 +560,6 @@ void HandleLatestGpsMessage(const char* message, int length)
 		{
 			// copy the NMEA sentence to the flash buffer
 			memcpy(_nmea, message, sizeof(_nmea));
-
 			_saveNmea = true;
 		}
 
@@ -575,10 +630,9 @@ static void InitialGreeting(void)
 
 	sprintf_P(msg, PSTR("  Flash start address: %u\r\n"), _flashWriteAddr);
 	PrintString(msg);
-	/*
-	*/
-	PrintString_P(PSTR("  Contents:\r\n"));
 
+	/*
+	PrintString_P(PSTR("  Contents:\r\n"));
 	begin_read(SPI_CS, 0);
 	while(true)
 	{
@@ -589,46 +643,66 @@ static void InitialGreeting(void)
 		PrintChar(data);
 	}
 	end_read(SPI_CS);
-
 	PrintString_P(PSTR("\r\n"));
+	*/
+
 	PrintFlush();
 }
 
 /** Print GPS messages to console */
 void LogGpsMessages(const char* message, int length)
 {
-	if (length < 2 || NULL == message)
+	if (length < 1 || NULL == message)
 		return;
 
-	PrintString_P(PSTR("< "));
-	PrintString(message);
+	sprintf_P(_buffer, PSTR("< %s\r\n"), message);
+
+	//CDC_Device_SendString(&VirtualSerial_CDC_Interface, _buffer);
+	PrintString(_buffer);
 	PrintFlush();
 }
 
-/**  */
+/** Displays a menu and allows the host to enter an interactive session
+with the GPS module */
 void GpsMenu(void)
 {
 	Adafruit_GPS_Init(&LogGpsMessages);
+
+	WaitForFixLineLow();
 	Adafruit_GPS_Suspend();
 
 	PrintString_P(PSTR("GPS Interactive Menu\r\n"));
 	PrintString_P(PSTR("H - Hot start GPS\r\n"));
+	PrintString_P(PSTR("C - Cold start GPS\r\n"));
+	PrintString_P(PSTR("B - Read battery voltage\r\n"));
+	PrintString_P(PSTR("L - Display calibration data\r\n"));
 	PrintString_P(PSTR("S - Suspend\r\n"));
 	PrintString_P(PSTR("W - Wakeup\r\n"));
 	PrintString_P(PSTR("U - Set update to 1Hz\r\n"));	
 	PrintString_P(PSTR("V - Ask for version\r\n"));
 	PrintString_P(PSTR("O - Output off\r\n"));
+	PrintString_P(PSTR("A - All Data\r\n"));
 	PrintString_P(PSTR("M - Minimum (GPRMC) logging only\r\n"));
 	PrintString_P(PSTR("R - Reset state\r\n"));
 	PrintString_P(PSTR("X - Exit\r\n"));
 	PrintString_P(PSTR("\r\n"));
 	PrintFlush();
 
-	while (1)
+	double voltage = 0.0;
+
+	while (true)
 	{
-		int usb = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-		if (usb < 0)
+		int usb = 0;
+		if (_hostConfigured && _hostConnected && CDC_Device_BytesReceived(&VirtualSerial_CDC_Interface) > 0)
+		{
+			usb = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+		}
+		else
+		{
 			continue;
+		}
+
+		TurnOnDiagLed();
 
 		switch (usb | 0x40)
 		{
@@ -636,8 +710,22 @@ void GpsMenu(void)
 				PrintString_P(PSTR("> $PMTK101*32 (hot start)\r\n"));
 				Adafruit_GPS_HotStart();
 				break;
+			case 'c':
+				PrintString_P(PSTR("> $PMTK103*30 (cold start)\r\n"));
+				Adafruit_GPS_ColdStart();
+				break;
+			case 'b':
+				voltage = ConvertBatteryVoltage(_gpsBattery);
+				sprintf_P(_buffer, PSTR("> Battery voltage: %1.3f\r\n"), voltage);
+				PrintString(_buffer);
+				break;
+			case 'l':
+				sprintf_P(_buffer, PSTR("> Calibration value: %d\r\n"), ADCA.CAL);
+				PrintString(_buffer);
+				break;
 			case 's':
 				PrintString_P(PSTR("> $PMTK161,0*28 (suspending)\r\n"));
+				WaitForFixLineLow();
 				Adafruit_GPS_Suspend();
 				break;
 			case 'w':
@@ -656,6 +744,10 @@ void GpsMenu(void)
 				PrintString_P(PSTR("> $PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (output off)\r\n"));
 				Adafruit_GPS_OutputOff();
 				break;
+			case 'a':
+				PrintString_P(PSTR("> $PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28 (all data)\r\n"));
+				Adafruit_GPS_AllData();
+				break;
 			case 'm':
 				PrintString_P(PSTR("> $PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29 (GPRMC only)\r\n"));
 				Adafruit_GPS_RMCOnly();
@@ -669,6 +761,11 @@ void GpsMenu(void)
 				Adafruit_GPS_Init(&HandleLatestGpsMessage);
 				return;
 		}
+
+		usb = -1;
+		PrintFlush();
+
+		TurnOffDiagLed();
 	}
 }
 
@@ -678,86 +775,56 @@ void GpsMenu(void)
 int main(void)
 {
 	uint8_t delay = 1;
-	char msg[160];
 
 	SetupHardware();
 
 	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
 	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
 
+	// wait for host to connect
+	while(!_hostConnected);
+
+	// introduce a slight pause to allow
+	// host to finalize connection
+	_delay_ms(500);
+
+	// issue greeting
+	InitialGreeting();
+
+	GpsMenu();
+
+	while(true);
+
+	//
 	while(true)
 	{
-		// USB tasks
-		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
-		USB_USBTask();
-
-		if (!_secondsTick)
-			continue;
-		_secondsTick = 0;
-
-		if (delay && _hostConnected)
+		int data = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+		if (data == ' ')
 		{
-			delay = 0;
-			InitialGreeting();
+			GpsMenu();
 		}
-	}
-
-
-	while(true)
-	{
-		// USB tasks
-		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
-		USB_USBTask();
-
-		// reset the host-connected delay
-		if (_hostConnected)
-		{
-			// send greeting if we've hit our host-timeout and the host is connected
-			if (delay)
-			{
-				TurnOnDiagLed();
-
-				delay = 0;
-				InitialGreeting();
-			}
-		}
-		else
-		{
-			// restart the delay
-			delay = 1;
-		}
-
-		continue;
 
 		// check for valid serial data
 		if (_gpsData > -1)
 		{
-			HandleGpsSerialInterrupt(_gpsData);
-			_gpsData = -1;
+			//HandleGpsSerialInterrupt(_gpsData);
+			//_gpsData = -1;
 		}
 
 		// save the latest NMEA sentence
 		if (_saveNmea)
 		{
-			// shutoff the GPS
-			PrintString_P(PSTR("Suspending GPS module.\r\n"));
-			DisableGps();
-
-			PrintString_P(PSTR("Saving NMEA sentence:\r\n"));
-			PrintString(_nmea);
-
-			sprintf_P(msg, PSTR("  address before: %u\r\n"), _flashWriteAddr);
-			PrintString(msg);
-
 			if (SaveNMEA())
 			{
 				PrintString_P(PSTR("  successfully saved nmea\r\n"));
 
-				sprintf_P(msg, PSTR("  address after: %u\r\n"), _flashWriteAddr);
-				PrintString(msg);
+				sprintf_P(_buffer, PSTR("  address after: %u\r\n"), _flashWriteAddr);
+				PrintString(_buffer);
 			}
 			else
+			{
 				PrintString_P(PSTR("  failed to save\r\n"));
+			}
 
 			_saveNmea = false;
 			_gpsFixTimeout = 0;
@@ -789,8 +856,8 @@ int main(void)
 				{
 					if (_allowedMisses)
 					{
-						sprintf_P(msg, PSTR("Skipping fix timeout %i\r\n"), _allowedMisses);
-						PrintString(msg);
+						sprintf_P(_buffer, PSTR("Skipping fix timeout %i\r\n"), _allowedMisses);
+						PrintString(_buffer);
 						_allowedMisses--;
 					}
 					else
@@ -830,26 +897,42 @@ int main(void)
 	}
 }
 
+/** USB Connect */
 void EVENT_USB_Device_Connect(void)
 {
-	// No-Op
 
+	// No-Op
 }
 
+/** USB Disconnect */
 void EVENT_USB_Device_Disconnect(void)
 {
-	// No-Op
 
+	// No-Op
+}
+
+/** Process control line state changes */
+void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const CDCInterfaceInfo)
+{
+	uint8_t mask = (CDC_CONTROL_LINE_OUT_DTR | CDC_CONTROL_LINE_OUT_RTS);
+	if (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & mask)
+	{
+		_hostConnected = true;
+	}
+	else
+	{
+		_hostConnected = false;
+	}
 }
 
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
 	// configure the CDC interface
-	bool ConfigSuccess = CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-	if (ConfigSuccess)
+	_hostConfigured = CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
+	if (_hostConfigured)
 	{
-		_hostConnected = 1;
+		// configuration successful
 	}
 }
 
@@ -864,6 +947,9 @@ void EVENT_USB_Device_ControlRequest(void)
 ISR(TCC0_CCA_vect)
 {
 	_secondsTick = 1;
+
+	// start an ADC conversion to read the GPS backup battery
+	ADCA.CTRLA = ADC_ENABLE_bm | ADC_CH1START_bm;
 
 	// Turn the LED on
 	if (_hostConnected)
@@ -890,14 +976,26 @@ ISR(TCC1_CCA_vect)
 {
 	ERR_LED_port.OUTTGL = ERR_LED_pin;
 
+	// USB tasks
+	CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+	USB_USBTask();
+
 	// clear interrupt flag
 	TCC1.INTFLAGS = TC1_CCAIF_bm;
 }
 
 /** GPS USART Receive interrupt handler */
-ISR(USARTE0_RXC_vect)
+ISR(GPS_UART_ISR)
 {
 	char data = GPS_UART.DATA;
 
-	_gpsData = data;
+	HandleGpsSerialInterrupt(data);
+	//_gpsData = data;
+}
+
+/** ADC Channel 1 interrupt handler */
+ISR(ADCA_CH1_vect)
+{
+	// read the battery value
+	_gpsBattery = ADCA.CH1.RES;
 }
