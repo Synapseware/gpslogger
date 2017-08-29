@@ -240,16 +240,15 @@ static void InitializeADC(void)
 	// sampling the output of 2 47k resistors (divide by 2).
 	// Leakage current through the voltage divider is
 	// I = V/R
-	// I = 3.6/(47k*2)
-	// I = 38.3uA
+	// I = 3.0/(47k*2)
+	// I = 31.9uA
 
 	// get the ADCA calibration data from ADCACAL0 and ADCACAL1
-	// NVM_CMD_READ_CALIB_ROW_gc
 	NVM.CMD = NVM_CMD_READ_CALIB_ROW_gc;
 	ADCA.CALL = pgm_read_byte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL0));
 	ADCA.CALH = pgm_read_byte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL1));
 	NVM.CMD = 0;
-	
+
 	// disable the ADC
 	ADCA.CTRLA = 0;
 
@@ -692,12 +691,8 @@ void GpsMenu(void)
 
 	while (true)
 	{
-		int usb = 0;
-		if (_hostConfigured && _hostConnected && CDC_Device_BytesReceived(&VirtualSerial_CDC_Interface) > 0)
-		{
-			usb = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-		}
-		else
+		int usb = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);;
+		if (usb < 1)
 		{
 			continue;
 		}
