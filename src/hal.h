@@ -1,7 +1,6 @@
 #ifndef __HAL_H__
 #define __HAL_H__
 
-
 // Built-in LED
 #define LED_PORT		PORTE
 #define LED_PIN			PIN1_bm
@@ -54,18 +53,6 @@ static inline void ConfigureGpsUart(void)
 						USART_DREINTLVL_OFF_gc;
 }
 
-
-//-----------------------------------------------------------------------------
-// Configures the TWI interface to drive the LCD
-static inline void ConfigureLCD(void)
-{
-	// enable pull-up on SDA & SCL
-	PORTCFG.MPCMASK = LCD_SCL | LCD_SDA;
-	LCD_PORT.LCD_CTRL = PORT_OPC_WIREDANDPULL_gc;
-
-	// set SCL & SDA as output
-	LCD_PORT.DIRSET = LCD_SCL | LCD_SDA;
-}
 
 
 //-----------------------------------------------------------------------------

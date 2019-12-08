@@ -20,6 +20,7 @@
 #include <LUFA/Drivers/USB/USB.h>
 
 #include "hal.h"
+#include "Board/LCD.h"
 #include "Drivers/AdafruitGps.h"
 #include "Drivers/TC_driver.h"
 #include "Drivers/at25df321.h"
@@ -38,10 +39,6 @@
 #define GPS_TIMEOUT		60
 #define GPS_FIX_MISSES	5
 
-// LCD info
-// Using a PCF8574AT (default I2C address is 0x3F) I2C expander
-#define LCD_BAUD		100000
-#define LCD_TWI_ADDR	0x7E
 
 void HandleLatestGpsMessage(const char* message, int length);
 

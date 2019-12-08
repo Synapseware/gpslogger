@@ -94,7 +94,12 @@
     #define LCD_TWI       TWIC
     #define LCD_SDA       PIN0_bm
     #define LCD_SCL       PIN1_bm
-    #define LCD_CTRL      PIN0CTRL
+    //#define LCD_CTRL      PIN0CTRL
+
+    // LCD info
+    // Using a PCF8574AT (default I2C address is 0x3F) I2C expander
+    #define LCD_TWI_ADDR  0x7E
+    #define LCD_BAUD      100000
 
 
 	/* Public Interface - May be used in end-application: */

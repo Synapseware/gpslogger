@@ -21,8 +21,8 @@ static int			_gpsFixTimeout		= GPS_TIMEOUT;
 static uint8_t		_allowedMisses		= GPS_FIX_MISSES;
 static char			_buffer[256];
 
-/** LCD variables */
-static uint8_t		_lcdState			= 0;
+
+
 
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
@@ -54,6 +54,18 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 					},
 			},
 	};
+
+
+// Setup the TWI configuration
+LCD_TWI_Interface_t lcdInterface =
+{
+	.TWI = &LCD_TWI,
+	.Port = &LCD_PORT,
+	.Pins = LCD_SDA | LCD_SCL, // SDA & SCL
+	//.Control = LCD_CTRL,
+	.Address = 0x7E,
+	.Baud = 100000
+};
 
 
 /** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
@@ -92,96 +104,8 @@ static void PrintFlush(void)
 		return;
 	CDC_Device_Flush(&VirtualSerial_CDC_Interface);
 }
-static void LCDPrintString_P(const char* str)
-{
-	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
-	{
-		char nibble;
-		while (true)
-		{
-			char data = pgm_read_byte(str++);
-			if (!data)
-				break;
 
-			// high nibble first
-			nibble =	(data & LCD_DATA_MASK) |
-						(_lcdState & LCD_STATE_MASK) |
-						LCD_WRITE_ENABLE;
-			TWI_SendByte(&LCD_TWI, nibble);
 
-			// low nibble last
-			nibble =	(data << 4) |
-						(_lcdState & LCD_STATE_MASK) |
-						LCD_WRITE_ENABLE;
-			TWI_SendByte(&LCD_TWI, nibble);
-		}
-
-		TWI_StopTransmission(&LCD_TWI);
-	}
-}
-
-static uint8_t HD44780_ReadState(void)
-{
-	uint8_t state;
-	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_READ, 100) == TWI_ERROR_NoError)
-	{
-		TWI_ReceiveByte(&LCD_TWI, &state, true);
-		TWI_StopTransmission(&LCD_TWI);
-	}
-
-	_lcdState = state & LCD_STATE_MASK;
-
-	return _lcdState;
-}
-
-static void HD44780_Clear(void)
-{
-	uint8_t data =	(CMD_DISPLAY_CLR << LCD_COMMAND_SHIFT) |
-					LCD_WRITE_COMMAND |
-					_lcdState;
-
-	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
-	{
-		TWI_SendByte(&LCD_TWI, data);
-		TWI_StopTransmission(&LCD_TWI);
-	}
-}
-
-static void HD44780_BacklightOn(void)
-{
-	if (_lcdState & LCD_BACKLIGHT)
-	{
-		// nothing to do - backlight is already on
-		return;
-	}
-
-	// set the backlight flag
-	_lcdState |= LCD_BACKLIGHT;
-
-	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
-	{
-		TWI_SendByte(&LCD_TWI, LCD_BACKLIGHT);
-		TWI_StopTransmission(&LCD_TWI);
-	}
-}
-
-static void HD44780_BacklightOff(void)
-{
-	if (!(_lcdState & LCD_BACKLIGHT))
-	{
-		// nothing to do - backlight is already on
-		return;
-	}
-
-	// clear the backlight flag
-	_lcdState &= ~LCD_BACKLIGHT;
-
-	if (TWI_StartTransmission(&LCD_TWI, LCD_TWI_ADDR | TWI_ADDRESS_WRITE, 100) == TWI_ERROR_NoError)
-	{
-		TWI_SendByte(&LCD_TWI, 0);
-		TWI_StopTransmission(&LCD_TWI);
-	}
-}
 
 /** Configures the CPU */
 static void ConfigureCPU(void)
@@ -249,7 +173,7 @@ static void InitializeADC(void)
 	ADCA.CALL = pgm_read_byte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL0));
 	ADCA.CALH = pgm_read_byte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL1));
 	NVM.CMD = 0;
-	
+
 	// disable the ADC
 	ADCA.CTRLA = 0;
 
@@ -302,20 +226,6 @@ static void InitializeSPI(void)
 	FlashDriver_Init(&SPI_DEVICE, &SPI_PORT, SPI_CS);
 }
 
-/** Configure hardware to support the LCD */
-static void InitializeLCD(void)
-{
-	ConfigureLCD();
-
-	// Initialize the TWI interface
-	TWI_Init(&LCD_TWI, TWI_BAUD_FROM_FREQ(LCD_BAUD));
-
-	HD44780_ReadState();
-	HD44780_Clear();
-	HD44780_BacklightOn();
-
-	LCDPrintString_P(PSTR("GPS Logger"));
-}
 
 /** Poweroff the GPS */
 static void DisableGps(void)
@@ -388,7 +298,7 @@ void SetupHardware(void)
 
 	// Initialize peripherals
 	InitializeTimers();
-	InitializeLCD();
+	ConfigureLCD(&lcdInterface);
 	InitializeADC();
 	InitializeSPI();
 
@@ -397,6 +307,8 @@ void SetupHardware(void)
 
 	// all done with setup - enable interrupts
 	GlobalInterruptEnable();
+
+	LCDPrintString_P(PSTR("GPS Logger"));
 }
 
 /** Finds the first free page in the dataflash chip */

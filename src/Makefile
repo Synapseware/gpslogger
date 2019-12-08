@@ -21,6 +21,7 @@ TARGET			= gpslogger
 SRC				= $(TARGET).c \
 				Descriptors.c \
 				NMEAParser.c \
+				Board/LCD.c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				Drivers/at25df321.c \
