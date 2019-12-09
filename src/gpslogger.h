@@ -17,17 +17,16 @@
 #include <LUFA/Drivers/Peripheral/Serial.h>
 #include <LUFA/Drivers/Peripheral/SPI.h>
 #include <LUFA/Drivers/Peripheral/TWI.h>
-#include <LUFA/Drivers/USB/USB.h>
 
-#include "hal.h"
-#include "Board/LCD.h"
+#include "Board/hal.h"
+#include "Drivers/LCD.h"
 #include "Drivers/AdafruitGps.h"
 #include "Drivers/TC_driver.h"
 #include "Drivers/at25df321.h"
 //#include "Drivers/rtc_driver.h"
 #include "Drivers/hd44780_twi.h"
-#include "Descriptors.h"
-#include "NMEAParser.h"
+#include "Drivers/LufaUsb.h"
+#include "Drivers/NMEAParser.h"
 
 // USB configuration
 #define USB_TIMER_PERIOD	(F_CPU / 256 / 125)
@@ -40,12 +39,6 @@
 #define GPS_FIX_MISSES	5
 
 
-void HandleLatestGpsMessage(const char* message, int length);
-
-void EVENT_USB_Device_Connect(void);
-void EVENT_USB_Device_Disconnect(void);
-void EVENT_USB_Device_ConfigurationChanged(void);
-void EVENT_USB_Device_ControlRequest(void);
 
 
 

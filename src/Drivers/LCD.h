@@ -19,18 +19,14 @@ typedef struct LCD_TWI_Interface
 } LCD_TWI_Interface_t;
 
 
+extern LCD_TWI_Interface_t lcdInterface;
 
-void ConfigureLCD(const LCD_TWI_Interface_t*);
 
-void LCDPrintString_P(const char*);
+void LCD_Configure(const LCD_TWI_Interface_t*);
 
-uint8_t HD44780_ReadState(void);
+void LCD_PrintString_P(const char*);
 
-void HD44780_Clear(void);
-
-void HD44780_BacklightOn(void);
-
-void HD44780_BacklightOff(void);
-
+void LCD_BacklightOn(void);
+void LCD_BacklightOff(void);
 
 #endif

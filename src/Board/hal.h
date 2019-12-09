@@ -54,7 +54,6 @@ static inline void ConfigureGpsUart(void)
 }
 
 
-
 //-----------------------------------------------------------------------------
 // Enables the GPS module
 static inline void EnableGpsModule(void)

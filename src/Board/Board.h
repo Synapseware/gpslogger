@@ -101,6 +101,9 @@
     #define LCD_TWI_ADDR  0x7E
     #define LCD_BAUD      100000
 
+    // USB info
+    #define USB_TASK_ISR  TCC1_CCA_vect
+
 
 	/* Public Interface - May be used in end-application: */
 		/* Macros: */
