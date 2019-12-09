@@ -34,21 +34,21 @@ void Adafruit_GPS_Init(Adafruit_GPS_OnMessageReceived_t handler)
 /** Clears all internal state data */
 void Adafruit_GPS_ResetState(void)
 {
-
+	// clear flags
 	_gps_flags = 0;
 }
 
 /** Returns the current status flags value */
 flags_t Adafruit_GPS_CurrentState(void)
 {
-
+	// return current flags
 	return _gps_flags;
 }
 
 /** Enable the GPS */
 void Adafruit_GPS_Enable(void)
 {
-
+	// 
 	EnableGpsModule();
 }
 
@@ -198,7 +198,7 @@ static bool ProcessGpsStateInfo(const char* message, int length)
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_COMPLETE;
 		return true;
 	}
-	
+
 	if (strncmp_P(message, PSTR(PGACK_COLD_STARTUP), 13) == 0)				// 1
 	{
 		_gps_flags |= ADAFRUIT_GPS_FLAGS_START;
@@ -263,6 +263,9 @@ void HandleGpsSerialInterrupt(const char data)
 	switch (data)
 	{
 		// check for end-of-message character from the GPS
+		case 0:
+		case '\r':
+			break;
 		case '\n':
 			writeData(data);
 			writeData(0);
@@ -277,7 +280,7 @@ void HandleGpsSerialInterrupt(const char data)
 			// Message was not state data - process
 			if (NULL != _onMessageReady)
 			{
-				_onMessageReady(_data, _buffidx);
+				_onMessageReady(_data);
 				ResetReceiveBuffer();
 			}
 

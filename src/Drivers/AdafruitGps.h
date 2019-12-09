@@ -116,7 +116,7 @@ Typical GPS conversation:
 #define ADAFRUIT_GPS_FLAGS_OUTPUT_CHG	(1<<7)
 
 
-typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*, int);
+typedef void (*Adafruit_GPS_OnMessageReceived_t)(const char*);
 typedef uint8_t flags_t;
 
 

@@ -16,15 +16,22 @@ ARCH			= XMEGA
 BOARD			= USER
 F_CPU			= 32000000
 F_USB			= 48000000
+FUSE_1			= 0x00
+FUSE_2			= 0xDF
+FUSE_4			= 0xFF
+FUSE_5			= 0xFF
 OPTIMIZATION	= s
 TARGET			= gpslogger
 SRC				= $(TARGET).c \
-				Descriptors.c \
-				NMEAParser.c \
+				Drivers/LCD.c \
+				Drivers/Descriptors.c \
+				Drivers/NMEAParser.c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				Drivers/at25df321.c \
 				Drivers/hd44780_twi.c \
+				Drivers/LufaUsb.c \
+				Drivers/GpsInterface.c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL) \
@@ -53,7 +60,20 @@ include $(DMBS_PATH)/hid.mk
 include $(DMBS_PATH)/avrdude.mk
 include $(DMBS_PATH)/atprogram.mk
 
+AVRDUDE = avrdude
+AVRDUDE_FLAGS = -p $(MCU) -P usb -c avrisp2 -b 115200
 
 program: all
-	avrdude -p $(MCU) -P usb -c avrisp2 -U flash:w:$(TARGET).hex
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$(TARGET).hex
 
+rfuses:
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U fuse1:r:/tmp/fuse1.txt:h -U fuse2:r:/tmp/fuse2.txt:h -U fuse4:r:/tmp/fuse4.txt:h -U fuse5:r:/tmp/fuse5.txt:h
+	@for idx in 1 2 4 5; do \
+		file=/tmp/fuse$$idx.txt; \
+		cmd=`cat $$file`; \
+		echo "Fuse $$idx: $$cmd"; \
+	done
+
+wfuses:
+	#$(AVRDUDE) $(AVRDUDE_FLAGS) -U lfuse:w:$(L_FUSE):m -U hfuse:w:$(H_FUSE):m -U efuse:w:$(E_FUSE):m
+	@echo "wfuses not implemented";
