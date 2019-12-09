@@ -571,7 +571,7 @@ void GpsMenuShowHelp(void)
 	USB_PrintString_P(PSTR(" M - Minimum (GPRMC) logging only\r\n"));
 	USB_PrintString_P(PSTR(" R - Reset state\r\n"));
 	USB_PrintString_P(PSTR(" X - Exit\r\n"));
-	USB_PrintString_P(PSTR(" ? - Show this menu\r\n"))
+	USB_PrintString_P(PSTR(" ? - Show this menu\r\n"));
 	USB_PrintString_P(PSTR("\r\n"));
 }
 
