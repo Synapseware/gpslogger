@@ -59,10 +59,16 @@
 
 
     // GPS
+    // Table 32-4. Port D - alternate functions.
+    // GPS RX goes to XMega TX and GPS TX goes to XMega RX
+    // PD2 => RXD0
+    // PD3 => TXD0
     #define GPS_UART      USARTD0
     #define GPS_port      PORTD
-    #define GPS_RX_pin    PIN2_bm
-    #define GPS_TX_pin    PIN3_bm
+    #define GPS_port_ISR  PORTD_INT0_vect
+    #define GPS_PPS_pin   PIN1_bm
+    #define GPS_TX_pin    PIN2_bm
+    #define GPS_RX_pin    PIN3_bm
     #define GPS_EN_pin    PIN4_bm
     #define GPS_FIX_pin   PIN5_bm
     #define GPS_UART_ISR  USARTD0_RXC_vect
@@ -82,12 +88,12 @@
     #define LED_PIN       PIN1_bm
 
     // LED setup
-    #define ERR_LED_port  PORTB
-    #define ERR_LED_pin   PIN2_bm
-    #define DIAG_LED_port PORTB
-    #define DIAG_LED_pin  PIN1_bm
     #define INFO_LED_port PORTB
     #define INFO_LED_pin  PIN0_bm
+    #define DIAG_LED_port PORTB
+    #define DIAG_LED_pin  PIN1_bm
+    #define ERR_LED_port  PORTB
+    #define ERR_LED_pin   PIN2_bm
 
     // I2C Interface for display
     #define LCD_PORT      PORTC

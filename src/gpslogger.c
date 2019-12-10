@@ -187,47 +187,54 @@ static void InitializeSPI(void)
 /** Poweroff the GPS */
 static void DisableGps(void)
 {
-	Adafruit_GPS_Suspend();
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_STANDBYOK) == 0);
+	// Sends the suspend command
+	Adafruit_GPS_Suspend(500);
+	Adafruit_GPS_Disable();
 }
 
-/** Poweron the GPS after a poweroff */
+/** Enables and performs initial configuration */
 static void EnableGps(void)
 {
-	TurnOnInfoLed();
+	TurnOnDiagLed();
 	Adafruit_GPS_Enable();
-	Adafruit_GPS_ResetState();
-
 	Adafruit_GPS_Wakeup();
-	Adafruit_GPS_ColdStart();
 
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_COMPLETE) == 0);
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_START) == 0);
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_AWAKE) == 0);
+	Adafruit_GPS_WaitForPPS(1000);
+	Adafruit_GPS_ColdStart(500);
+	Adafruit_GPS_Update1Hz(500);
+	Adafruit_GPS_RMCOnly(500);
 
-	Adafruit_GPS_Update1Hz();
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_1HZ_OK) == 0);
+	memset(_gpsVersion, 0, sizeof(_gpsVersion));
+	if (!Adafruit_GPS_AskForVersion(500, _gpsVersion, sizeof(_gpsVersion)))
+	{
+		strncpy_P(_gpsVersion, PSTR("NO VERSION FOUND"), sizeof(_gpsVersion));
+		TurnOnErrLed();
+		while(true);
+	}
 
-	Adafruit_GPS_RMCOnly();
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_OUTPUT_CHG) == 0);
-	TurnOffInfoLed();
+	TurnOffDiagLed();
 }
 
 /** Print GPS messages to console */
-void LogGpsMessages(const char* message)
+void DebugLogGpsMessages(const char* message)
 {
 	if (NULL == message)
 		return;
 
-	if (message[0] == '\r' || message[0] == '\n')
-		return;
+	int length = strlen(message);
 
-	if (strlen(message) < 2)
+	if (message[0] == '\r' || message[0] == '\n' || length < 5)
+	{
+		memset(message, 0, length);
 		return;
+	}
 
 	USB_PrintString_P(PSTR("> "));
 	USB_PrintString(message);
 	USB_PrintString_P(PSTR("\r\n"));
+
+	// clear the buffer
+	memset(message, 0, length);
 }
 
 
@@ -237,6 +244,7 @@ GPS NMEA data: http://www.gpsinformation.org/dale/nmea.htm */
 void HandleLatestGpsMessage(const char* message)
 {
 	strlcpy(_lastGpsMessage, message, sizeof(_lastGpsMessage));
+	memset(message, 0, strlen(message));
 	_processGpsMessage = true;
 }
 
@@ -256,7 +264,7 @@ void ProcessGpsMessage(const char* message)
 		return;
 
 	// parse GPRMC - recommended minimum navigation data
-	strlcpy_P(cmd_buff, PSTR(PMTK_GPRMC_HEADER), sizeof(cmd_buff));
+	strlcpy_P(cmd_buff, PMTK_GPRMC_HEADER, sizeof(cmd_buff));
 	if (0 == strncmp(message, cmd_buff, 6))
 	{
 		// process fix data - look for 'V' or 'A'
@@ -285,10 +293,10 @@ void ProcessGpsMessage(const char* message)
 	}
 
 	// Parse PMTK
-	strlcpy_P(cmd_buff, PSTR(PMTK_HEADER), sizeof(cmd_buff));
+	strlcpy_P(cmd_buff, PMTK_HEADER, sizeof(cmd_buff));
 	if (0 == strncmp(message, cmd_buff, 5))
 	{
-		strlcpy_P(cmd_buff, PSTR(PMTK_VERSION_HEADER), sizeof(cmd_buff));
+		strlcpy_P(cmd_buff, PMTK_VERSION_HEADER, sizeof(cmd_buff));
 		if (0 == strncmp(message, cmd_buff, 9))
 		{
 			strncpy(_gpsVersion, message, sizeof(_gpsVersion));
@@ -296,7 +304,6 @@ void ProcessGpsMessage(const char* message)
 
 		return;
 	}
-
 }
 
 /** Configure the GPS hardware */
@@ -306,12 +313,6 @@ static void InitializeGps(void)
 	ConfigureGpsPins();
 
 	Adafruit_GPS_Init(&HandleLatestGpsMessage);
-
-	EnableGps();
-
-	Adafruit_GPS_AskForVersion();
-
-	//while ((Adafruit_GPS_CurrentState() & ADAFRUIT_GPS_FLAGS_VERSION) == 0);
 }
 
 /** Configures the board hardware and chip peripherals for the application's functionality. */
@@ -364,7 +365,6 @@ static int32_t FindFirstFreeAddress(void)
 		TurnOnErrLed();
 	}
 
-	TurnOffErrLed();
 	TurnOnInfoLed();
 
 	int32_t address = 0;
@@ -483,12 +483,6 @@ static bool SaveNMEA(void)
 static void InitialGreeting(void)
 {
 	USB_PrintString_P(PSTR("GPS Logger v1.1 - 20150801\r\n"));
-	USB_PrintString_P(PSTR(" - waiting for GPS data -"));
-	while (strlen(_gpsVersion) < 1)
-	{
-		_delay_ms(250);
-	}
-
 	USB_PrintString_P(PSTR(" Version: "));
 	if (strlen(_gpsVersion) > 0)
 		USB_PrintString(_gpsVersion);
@@ -580,15 +574,15 @@ void GpsMenu(void)
 {
 	GpsMenuShowHelp();
 
-	WaitForFixLineLow();
-	Adafruit_GPS_Suspend();
+	Adafruit_GPS_Disable();
+	USB_PrintString_P(PSTR("GPS is now disabled\r\n"));
 
 	double voltage = 0.0;
 
-	while (true)
+	while (USB_IsHostConfigured() && USB_IsHostConnected())
 	{
 		int usb = 0;
-		if (USB_IsHostConfigured() && USB_IsHostConnected() && USB_BytesReceived() > 0)
+		if (USB_BytesReceived() > 0)
 		{
 			usb = USB_ReceiveByte();
 		}
@@ -605,15 +599,16 @@ void GpsMenu(void)
 				GpsMenuShowHelp();
 				break;
 			case 'h':
-				Adafruit_GPS_HotStart();
 				USB_PrintString_P(PSTR("> "));
-				USB_PrintString_P(PSTR("> $PMTK101*32 (hot start)\r\n"));
+				USB_PrintString_P(PMTK_CMD_HOT_START);
+				USB_PrintString_P(PSTR(" (hot start)\r\n"));
+				Adafruit_GPS_HotStart();
 				break;
 			case 'c':
-				Adafruit_GPS_ColdStart();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_CMD_COLD_START);
 				USB_PrintString_P(PSTR(" (cold start)\r\n"));
+				Adafruit_GPS_ColdStart(500);
 				break;
 			case 'b':
 				voltage = ConvertBatteryVoltage(_gpsBattery);
@@ -626,56 +621,66 @@ void GpsMenu(void)
 				break;
 			case 's':
 				WaitForFixLineLow();
-				Adafruit_GPS_Suspend();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_STANDBY);
 				USB_PrintString_P(PSTR(" (suspending)\r\n"));
+				Adafruit_GPS_Suspend(500);
 				break;
 			case 'w':
-				Adafruit_GPS_Wakeup();
 				USB_PrintString_P(PSTR("> ' ' (wakeup)\r\n"));
+				Adafruit_GPS_Wakeup();
 				break;
 			case 'u':
-				Adafruit_GPS_Update1Hz();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_SET_NMEA_UPDATE_1HZ);
 				USB_PrintString_P(PSTR(" (1Hz output)\r\n"));
+				Adafruit_GPS_Update1Hz(500);
 				break;
 			case 'e':
-				Adafruit_GPS_Enable();
 				USB_PrintString_P(PSTR("> Enabling GPS\r\n"));
+				Adafruit_GPS_Enable();
 				break;
 			case 'd':
-				Adafruit_GPS_Disable();
 				USB_PrintString_P(PSTR("> Disabling GPS\r\n"));
+				Adafruit_GPS_Disable();
 				break;
 			case 'v':
-				Adafruit_GPS_AskForVersion();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_Q_RELEASE);
 				USB_PrintString_P(PSTR(" (version query)\r\n"));
+				if (Adafruit_GPS_AskForVersion(500, _gpsVersion, sizeof(_gpsVersion)))
+				{
+					USB_PrintString_P(PSTR("Version query success: "));
+					USB_PrintString(_gpsVersion);
+					USB_PrintString_P(PSTR("\r\n"));
+				}
+				else
+				{
+					strncpy_P(_gpsVersion, PSTR("NO VERSION FOUND"), sizeof(_gpsVersion));
+					USB_PrintString_P(PSTR("Failed to fetch version information from module\r\n"));					
+				}
 				break;
 			case 'o':
-				Adafruit_GPS_OutputOff();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_SET_NMEA_OUTPUT_OFF);
 				USB_PrintString_P(PSTR(" (output off)\r\n"));
+				Adafruit_GPS_OutputOff();
 				break;
 			case 'a':
-				Adafruit_GPS_AllData();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_SET_NMEA_OUTPUT_ALLDATA);
 				USB_PrintString_P(PSTR(" (all data)\r\n"));
+				Adafruit_GPS_AllData(500);
 				break;
 			case 'm':
-				Adafruit_GPS_RMCOnly();
 				USB_PrintString_P(PSTR("> "));
 				USB_PrintString_P(PMTK_SET_NMEA_OUTPUT_RMCONLY);
 				USB_PrintString_P(PSTR(" (GPRMC only)\r\n"));
+				Adafruit_GPS_RMCOnly(500);
 				break;
 			case 'r':
+				USB_PrintString_P(PSTR("Resetting GPS state data\r\n"));
 				Adafruit_GPS_ResetState();
-				USB_PrintString_P(PSTR("Resetting GPS\r\n"));
 				break;
 			case 'x':
 				USB_PrintString_P(PSTR("Exiting\r\n"));
@@ -688,18 +693,28 @@ void GpsMenu(void)
 }
 
 /** Main program entry point. This routine contains the overall program flow, including initial
- *  setup of all components and the main program loop.
- */
+ *  setup of all components and the main program loop. */
 int main(void)
 {
 	wdt_disable();
 
 	SetupHardware();
 
+	// Wait 5 seconds for USB to be available
+	uint8_t timeout = 5;
+	while(timeout > 0)
+	{
+		if (USB_IsHostConnected() && USB_IsHostConfigured())
+			break;
+
+		_delay_ms(1000);
+		timeout--;
+	}
+
+	EnableGps();
+
 	// issue greeting
 	InitialGreeting();
-
-	while(true);
 
 	GpsMenu();
 
@@ -708,7 +723,8 @@ int main(void)
 	{
 		if (_processGpsMessage)
 		{
-			ProcessGpsMessage(_lastGpsMessage);
+			//ProcessGpsMessage(_lastGpsMessage);
+			DebugLogGpsMessages(_lastGpsMessage);
 			_processGpsMessage = false;
 			continue;
 		}
@@ -741,12 +757,6 @@ int main(void)
 			//EnterPowerSave();
 		}
 
-		if (_displayMessage)
-		{
-			LogGpsMessages(_nmea);
-			_displayMessage = false;
-		}
-
 		// only main-loop code below this point
 		if (!_secondsTick)
 			continue;
@@ -772,7 +782,6 @@ int main(void)
 					{
 						sprintf_P(_buffer, PSTR("Skipping fix timeout %i\r\n"), _allowedMisses);
 						USB_PrintString(_buffer);
-						PrintString(_buffer);
 						_allowedMisses--;
 					}
 					else
@@ -860,6 +869,8 @@ ISR(GPS_UART_ISR)
 	char data = GPS_UART.DATA;
 
 	HandleGpsSerialInterrupt(data);
+
+	GPS_UART.STATUS = USART_RXCIF_bm;
 }
 
 /** ADC Channel 1 interrupt handler */
@@ -867,4 +878,14 @@ ISR(ADCA_CH1_vect)
 {
 	// read the battery value
 	_gpsBattery = ADCA.CH1.RES;
+}
+
+/** GPS Pin change interrupt handler */
+ISR(PORTD_INT0_vect)
+{
+	// Toggled when PPS pin changes from H to L
+	Adafruit_GPS_SetPpsState();
+
+	// clear the interrupt flag
+	GPS_port.INTFLAGS = PORT_INT0IF_bm;
 }

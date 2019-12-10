@@ -73,8 +73,7 @@ void USB_PrintString_P(const char* message)
 	if (!_hostConnected || NULL == message)
 		return;
 
-	CDC_Device_SendString_P(&VirtualSerial_CDC_Interface,
-		message);
+	CDC_Device_SendString_P(&VirtualSerial_CDC_Interface, message);
 	USB_PrintFlush();
 }
 void USB_PrintString(const char* message)
@@ -82,8 +81,7 @@ void USB_PrintString(const char* message)
 	if (!_hostConnected || NULL == message)
 		return;
 
-	CDC_Device_SendString(&VirtualSerial_CDC_Interface,
-		message);
+	CDC_Device_SendString(&VirtualSerial_CDC_Interface, message);
 	USB_PrintFlush();
 }
 void USB_PrintFlush(void)

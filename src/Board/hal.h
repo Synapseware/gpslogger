@@ -24,15 +24,20 @@ static inline void ConfigureGpsPins(void)
 	GPS_port.OUTSET = (GPS_TX_pin | GPS_RX_pin | GPS_EN_pin | GPS_FIX_pin);
 
 	// enable pullups
-	PORTCFG.MPCMASK = (GPS_TX_pin | GPS_RX_pin | GPS_EN_pin);
-	GPS_port.PIN2CTRL = PORT_OPC_WIREDANDPULL_gc;
+	PORTCFG.MPCMASK = (GPS_TX_pin | GPS_RX_pin | GPS_EN_pin | GPS_PPS_pin);
+	GPS_port.PIN2CTRL = PORT_OPC_PULLUP_gc;
+
+	// Configure the PPS pin
+	GPS_port.PIN1CTRL = PORT_OPC_PULLUP_gc | PORT_ISC_FALLING_gc;
+	GPS_port.INT0MASK = GPS_PPS_pin;
+	GPS_port.INTCTRL = PORT_INT0LVL_LO_gc;
 
 	// enable pulldown on FIX pin (active high)
-	GPS_port.PIN5CTRL = PORT_OPC_WIREDORPULL_gc;
+	GPS_port.PIN5CTRL = PORT_OPC_PULLDOWN_gc;
 
 	// set direction bits
-	GPS_port.DIRSET = (GPS_TX_pin | GPS_EN_pin);
-	GPS_port.DIRCLR = (GPS_FIX_pin | GPS_RX_pin);
+	GPS_port.DIRSET = (GPS_RX_pin | GPS_EN_pin);
+	GPS_port.DIRCLR = (GPS_FIX_pin | GPS_TX_pin | GPS_PPS_pin);
 
 	// configure the ADC pins (battery input and AREF)
 	GPS_BAT_port.DIRCLR = GPS_BAT_pin | PIN0_bm;
@@ -94,13 +99,24 @@ static inline void WaitForFixLineLow(void)
 	{}
 }
 
+static inline bool IsPpsLineLow(void)
+{
+	return (GPS_port.IN & GPS_PPS_pin) == 0;
+}
+
 static inline void ConfigureLeds(void)
 {
 	LED_PORT.OUTCLR = LED_PIN;
 	LED_PORT.DIRSET = LED_PIN;
-	ERR_LED_port.DIRSET = ERR_LED_pin;
-	DIAG_LED_port.DIRSET = DIAG_LED_pin;
+
+	INFO_LED_port.OUTCLR = LED_PIN;
 	INFO_LED_port.DIRSET = INFO_LED_pin;
+
+	DIAG_LED_port.OUTCLR = LED_PIN;
+	DIAG_LED_port.DIRSET = DIAG_LED_pin;
+
+	ERR_LED_port.OUTCLR = LED_PIN;
+	ERR_LED_port.DIRSET = ERR_LED_pin;
 }
 static inline void TurnOnBuiltInLed(void)
 {
