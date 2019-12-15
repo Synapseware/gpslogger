@@ -1,0 +1,6 @@
+# Ignore files
+obj/
+*.o
+*.eep
+*.hex
+
