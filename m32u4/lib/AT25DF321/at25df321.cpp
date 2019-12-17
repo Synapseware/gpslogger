@@ -19,7 +19,7 @@
 	// need to implement support for different MCU's
 	#define SPI_PORT		PORT_t
 	#define SPI_CS			PIN4_bm
-	#define SPI_SCK		PIN7_bm
+	#define SPI_SCK			PIN7_bm
 	#define SPI_MOSI		PIN5_bm
 	#define SPI_MISO		PIN6_bm
 
@@ -29,28 +29,10 @@
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Initializes the AT24DF321 flash driver
-FlashDriver::FlashDriver(uint8_t deviceAddress, SPISettings* spiSettings, SPIClass* spiClass)
+FlashDriver::FlashDriver(uint8_t deviceAddress, SPIClass* spi)
 {
 	_deviceAddress = deviceAddress;
-	_spiSettings = spiSettings;
-	_spiClass = spiClass;
-
-	// Setup GPIO pins
-	SPI_DDR |= (SPI_CS_bm | SPI_SCK | SPI_SCK);
-	SPI_MISO &= ~(SPI_MISO_bm);
-
-	SPCR |= (0<<SPIE) | // 
-			(1<<SPE)  | // 
-			(0<<DORD) | // 
-			(1<<MSTR) | // 
-			(0<<CPOL) | // 
-			(0<<CPHA) | //  
-			(0<<SPR1) | // Fosc / 2
-			(0<<SPR0);  // Fosc / 2
-
-	SPSR |=	(1<<SPI2X); // Fosc / 2	
-
-	//SPDR;
+	_spi = spi;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -91,7 +73,7 @@ void FlashDriver::writeEnable(void)
 {
 	// write 06h to the chip to enable the write mode
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_WRITE_ENABLE);
+	_spi->transfer(AT25DF321_WRITE_ENABLE);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -101,7 +83,7 @@ void FlashDriver::writeDisable(void)
 {
 	// write 04h to the chip to disable the write mode
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_WRITE_DISABLE);
+	_spi->transfer(AT25DF321_WRITE_DISABLE);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -116,11 +98,11 @@ bool FlashDriver::isValid(void)
 		devid1	= 0,
 		extinfo	= 0;
 
-	SPI_SendByte(AT25DF321_READ_MFG_ID);
-	mfgid	= SPI_ReceiveByte();
-	devid1	= SPI_ReceiveByte();
-	extinfo |= SPI_ReceiveByte();
-	extinfo |= SPI_ReceiveByte();
+	_spi->transfer(AT25DF321_READ_MFG_ID);
+	mfgid	= _spi->transfer(0);
+	devid1	= _spi->transfer(0);
+	extinfo |= _spi->transfer(0);
+	extinfo |= _spi->transfer(0);
 
 	SPI_PORT |= (SPI_CS_bm);
 
@@ -135,7 +117,7 @@ void FlashDriver::suspend(void)
 {
 	// write 06h to the chip to enable the write mode
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_DEEP_PWRDN);
+	_spi->transfer(AT25DF321_DEEP_PWRDN);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -145,7 +127,7 @@ void FlashDriver::resume(void)
 {
 	// write 06h to the chip to enable the write mode
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_RESUME);
+	_spi->transfer(AT25DF321_RESUME);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -154,7 +136,7 @@ void FlashDriver::resume(void)
 void FlashDriver::globalUnprotect(void)
 {
 	// 
-	setGlobalProtectState( AT25DF321_SREG_GLOBAL_UNPROTECT);
+	setGlobalProtectState(AT25DF321_SREG_GLOBAL_UNPROTECT);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -172,10 +154,10 @@ void FlashDriver::unprotectSector(uint8_t sector)
 	writeEnable();
 
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_UNPROTECT_SECTOR);
-	SPI_SendByte(sector & 0x3F);
-	SPI_SendByte(0);
-	SPI_SendByte(0);
+	_spi->transfer(AT25DF321_UNPROTECT_SECTOR);
+	_spi->transfer(sector & 0x3F);
+	_spi->transfer(0);
+	_spi->transfer(0);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -183,13 +165,13 @@ void FlashDriver::unprotectSector(uint8_t sector)
 // Sets a sector as unprotected
 void FlashDriver::protectSector(uint8_t sector)
 {
-	write_enable();
+	writeEnable();
 
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_PROTECT_SECTOR);
-	SPI_SendByte(sector & 0x3F);
-	SPI_SendByte(0);
-	SPI_SendByte(0);
+	_spi->transfer(AT25DF321_PROTECT_SECTOR);
+	_spi->transfer(sector & 0x3F);
+	_spi->transfer(0);
+	_spi->transfer(0);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -202,7 +184,7 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 	switch (blockSize)
 	{
 		case BLOCK_SIZE_4k:
-			mode = AT25DF321_BLOCK_ERASE_4k;
+			mode = AT25DF321_BLOCK_ERASE_4K;
 			address &= AT25DF321_BLK_MASK_4K;
 			break;
 		case BLOCK_SIZE_32k:
@@ -229,13 +211,15 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 
 	// send the mode byte, and optionall the address bytes if
 	// not a whole-chip erase
-	SPI_SendByte(mode);
+	_spi->transfer(mode);
 	if (mode != AT25DF321_CHIP_ERASE)
 	{
-		SPI_SendByte((address >> 16) & 0x3F);
-		SPI_SendByte(address >> 8);
-		SPI_SendByte(address & 0xFF);
+		_spi->transfer((address >> 16) & 0x3F);
+		_spi->transfer(address >> 8);
+		_spi->transfer(address & 0xFF);
 	}
+
+	SPI_PORT |= (SPI_CS_bm);
 
 	writeDisable();
 
@@ -249,12 +233,12 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 char FlashDriver::read(void)
 {
 	// call the SPI read byte method
-	return SPI_ReceiveByte();
+	return (char) _spi->transfer(0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// reads 'count' bytes into 'pbuff' array and returns the number of bytes read
-int FlashDriver::read(uint32_t address, char * pbuff, int count)
+// reads count bytes into the buffer and returns the number of bytes read
+int FlashDriver::read(uint32_t address, char* buffer, int count)
 {
 	beginRead(address);
 
@@ -262,10 +246,10 @@ int FlashDriver::read(uint32_t address, char * pbuff, int count)
 	while (index < count)
 	{
 		// clock in the data from the chip
-		pbuff[index++] = SPI_ReceiveByte();
+		buffer[index++] = _spi->transfer(0);
 	}
 
-	end_read(chip_cs);
+	endRead();
 
 	return index;
 }
@@ -274,20 +258,69 @@ int FlashDriver::read(uint32_t address, char * pbuff, int count)
 // Send a byte to the flash as part of a begin-write-end transaction
 void FlashDriver::write(char data)
 {
-
-	SPI_SendByte(data);
+	// caller has to call beginWrite(address) first!
+	_spi->transfer(data);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Writes a block of data to the chip.  Block can be 1 to 256 bytes wide.
-void FlashDriver::write(uint32_t address, const char * pbuff, int count)
+void FlashDriver::write(uint32_t address, const char* buffer, int count)
 {
 	beginWrite(address);
 
 	int index = 0;
 	while(index < count)
 	{
-		SPI_SendByte(pbuff[index++]);
+		_spi->transfer(buffer[index++]);
+	}
+
+	endWrite();
+}
+
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Writes a string to the flash, stopping at the null terminator (or count).
+void FlashDriver::writeString(uint32_t address, const char* buffer, int count)
+{
+	int index = 0;
+	uint8_t page = 0;
+	uint8_t start = 256 - (address % 256);
+
+	beginWrite(address);
+
+	while (index < count)
+	{
+		char data = buffer[index++];
+
+		page++;
+		if (page == 0)
+		{
+			endWrite();
+
+			// make sure to complete a full page write before moving on,
+			// so we don't lose data or overwrite existing data by causing
+			// the devices internal buffer to overflow.
+			if (start != 0)
+			{
+				address += start;
+				start = 0;
+			}
+			else
+			{
+				address += 256;
+			}
+
+			// wait for programming to complete
+			while (!isDeviceReady());
+
+			beginWrite(address);
+		}
+
+		// bail here if we're at the end of the string
+		if (data == 0)
+			break;
+
+		_spi->transfer(data);
 	}
 
 	endWrite();
@@ -306,30 +339,19 @@ void FlashDriver::beginRead(uint32_t address)
 {
 	SPI_PORT &= ~(SPI_CS_bm);
 
-	SPI_SendByte(AT25DF321_READ_ARRAY_FAST);
-	SPI_SendByte((address >> 16) & 0x3F);
-	SPI_SendByte((address >> 8) & 0xFF);
-	SPI_SendByte(address & 0xFF);
+	_spi->transfer(AT25DF321_READ_ARRAY_FAST);
+	_spi->transfer((address >> 16) & 0x3F);	// MSB address byte
+	_spi->transfer((address >> 8) & 0xFF);	// ---
+	_spi->transfer(address & 0xFF);			// LSB address write
 
 	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
-	SPI_SendByte(0);
+	_spi->transfer(0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 void FlashDriver::endRead(void)
 {
 
-	SPI_PORT |= (SPI_CS_bm);
-}
-
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Enable writes by setting the write enable bit
-void FlashDriver::writeEnable(void)
-{
-	// write 06h to the chip to enable the write mode
-	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_WRITE_ENABLE);
 	SPI_PORT |= (SPI_CS_bm);
 }
 
@@ -346,21 +368,70 @@ void FlashDriver::beginWrite(uint32_t address)
 
 	// send the address	
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_BYTE_PAGE_PGM);
-	SPI_SendByte((address >> 16) & 0x3F);
-	SPI_SendByte((address >> 8) & 0xFF);
-	SPI_SendByte(address & 0xFF);
+	_spi->transfer(AT25DF321_BYTE_PAGE_PGM);
+	_spi->transfer((address >> 16) & 0x3F);	// MSB address byte
+	_spi->transfer((address >> 8) & 0xFF);	// ---
+	_spi->transfer(address & 0xFF);			// LSB address byte
 }
-
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Ends a write transaction
 void FlashDriver::endWrite(void)
 {
+	writeDisable();
 	//
 	SPI_PORT |= (SPI_CS_bm);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+// Block write method which supports writting multiple pages
+uint32_t FlashDriver::write(uint32_t address, const char* buffer, int length, bool isString)
+{
+	int index = 0;
+	uint8_t page = 0;
+	uint8_t start = 256 - (address % 256);
+
+	beginWrite(address);
+
+	while (index < length)
+	{
+		char data = buffer[index++];
+
+		page++;
+		if (page == 0)
+		{
+			endWrite();
+
+			// make sure to complete a full page write before moving on,
+			// so we don't lose data or overwrite existing data by causing
+			// the devices internal buffer to overflow.
+			if (start != 0)
+			{
+				address += start;
+				start = 0;
+			}
+			else
+			{
+				address += 256;
+			}
+
+			// wait for programming to complete
+			while (!isDeviceReady());
+
+			beginWrite(address);
+		}
+
+		// bail here if we're at the end of the string
+		if (isString && data == 0)
+			break;
+
+		_spi->transfer(data);
+	}
+
+	endWrite();
+
+	return index;
+}
 
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -368,39 +439,22 @@ void FlashDriver::endWrite(void)
 uint8_t FlashDriver::readStatusRegister(void)
 {
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_READ_STATUS);
-	uint8_t status = SPI_ReceiveByte();
+	_spi->transfer(AT25DF321_READ_STATUS);
+	uint8_t status = _spi->transfer(0);
 	SPI_PORT |= (SPI_CS_bm);
 
 	return status;
 }
 
 
-void FlashDriver::readStatusRegister(uint8_t protect)
+void FlashDriver::setGlobalProtectState(uint8_t protect)
 {
 	// enable writes
-	writeEnable(void);
+	writeEnable();
 
 	// issue global unprotect
 	SPI_PORT &= ~(SPI_CS_bm);
-	SPI_SendByte(AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
-	SPI_SendByte(protect);
+	_spi->transfer(AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
+	_spi->transfer(protect);
 	SPI_PORT |= (SPI_CS_bm);
 }
-
-char FlashDriver::SPI_ReceiveByte(void)
-{
-	// block until complete
-	while((SPSR & (1<<SPIF)) != 0);
-
-	return SPDR;
-}
-
-void FlashDriver::SPI_SendByte(char data)
-{
-	// block until complete
-	while((SPSR & (1<<SPIF)) != 0);
-
-	SPDR = data;
-}
-

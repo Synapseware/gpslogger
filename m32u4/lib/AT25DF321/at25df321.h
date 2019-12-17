@@ -80,7 +80,7 @@
 //---------------------------------------------------
 
 
-typedef BLOCK_SIZE_t uint8_t;
+typedef uint8_t BLOCK_SIZE_t;
 #define BLOCK_SIZE_4k			1
 #define BLOCK_SIZE_32k			2
 #define BLOCK_SIZE_64k			3
@@ -90,49 +90,59 @@ typedef BLOCK_SIZE_t uint8_t;
 class FlashDriver
 {
 public:
-	FlashDriver(uint8_t deviceAddress, SPISettings* spiSettings, SPIClass* spiClass);
+	FlashDriver(uint8_t deviceAddress, SPIClass* spi);
 
+	// valid device check
 	bool isValid(void);
 
+	// power saving
 	void suspend(void);
 	void resume(void);
 
+	// protections
 	void globalUnprotect(void);
 	void globalProtect(void);
 	void protectSector(uint8_t sector);
 	void unprotectSector(uint8_t sector);
 
+	// device state
 	bool isWriteEnabled(void);
 	bool isWriteProtected(void);
 	bool isDeviceReady(void);
 
+	// check for previous programming error
 	bool programmingError(void);
 
-	bool erase(BLOCK_SIZE_t size);
+	bool erase(BLOCK_SIZE_t size, uint32_t address);
 
-	void write(uint32_t address, char data);
+	// individual writes
+	void beginWrite(uint32_t address);
+	void write(char data);
+	void endWrite(void);
+
+	// block writes
 	void write(uint32_t address, const char*, int);
+	void writeString(uint32_t address, const char*, int);
 
+	// individual reads
+	void beginRead(uint32_t address);
 	char read(void);
+	void endRead(void);
+
+	// block reads
 	int read(uint32_t address, char*, int);
+	int readString(uint32_t address, char*, int);
 
 
 private:
-	char SPI_ReceiveByte(void);
-	void SPI_SendByte(char data);
-
 	uint8_t readStatusRegister(void);
 	void setGlobalProtectState(uint8_t protect);
 
 	void writeEnable(void);
-	void beginWrite(uint32_t address);
-	void endWrite(void);
+	uint32_t write(uint32_t address, const char*, int, bool isString);
+	void writeDisable(void);
 
-	void beginRead(uint32_t address);
-	void endRead(void);
-
-	SPISettings* _spiSettings;
-	SPIClass* _spiClass;
+	SPIClass* _spi;
 	uint8_t _deviceAddress;
 };
 
