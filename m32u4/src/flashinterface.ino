@@ -1,21 +1,27 @@
 
 
-
+/** TODO:  Improve this so it does a b-search and finds the first free address within a page.  */
 int32_t FindFirstFreeAddress(void)
 {
-	if (!flash.isDeviceReady())
+	/*
+	if (!flash->isDeviceReady())
 	{
-		setOnErrLed();
+		setErrLed();
+
+		// wait for ready state
+		while (!flash->isDeviceReady());
+
+		clearErrLed();
 	}
 
-	setDiagLed();
+	setDbgLed();
 
-	int32_t address = 0;
-	int32_t freefrom = -1;
+	uint32_t address = 0;
+	uint32_t freefrom = 0;
 	int matches = 0;
 
 	flash->beginRead(address);
-	while (address < FLASH_TOTAL_SIZE && address > -1)
+	while (address < FLASH_TOTAL_SIZE)
 	{
 		// look for the first 0xFF followed by 0xFF's to the end
 		char data = flash->read();
@@ -29,7 +35,7 @@ int32_t FindFirstFreeAddress(void)
 		else
 		{
 			matches = 0;
-			freefrom = -1;
+			freefrom = 0;
 		}
 
 		address++;
@@ -41,8 +47,11 @@ int32_t FindFirstFreeAddress(void)
 
 	flash->endRead();
 
-	clearErrLed();
+	clearDbgLed();
 
 	return freefrom;
+	*/
+
+	return 0;
 }
 

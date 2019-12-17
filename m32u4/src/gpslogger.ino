@@ -1,7 +1,7 @@
 //#include <DataFlash.h>
 
 #include <gpslogger.h>
-#include <Adafruit_GPS.h>
+
 
 Adafruit_GPS* gps = NULL;
 FlashDriver* flash = NULL;
@@ -125,7 +125,7 @@ void setup(void)
 	// Disable the GPS
 	GPS_PORT &= ~(GPS_EN_bm);
 
-	flash = new FlashDriver(0, NULL, NULL);
+	flash = new FlashDriver(0, &SPI);
 
 	sei();
 }

@@ -6,7 +6,9 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <HardwareSerial.h>
+#include <SPI.h>
 #include <Adafruit_GPS.h>
+#include <at25df321.h>
 
 
 // The error LED is used to indicate a hard/unrecoverable failure state
