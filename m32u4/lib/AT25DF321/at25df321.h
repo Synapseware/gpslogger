@@ -72,6 +72,7 @@
 #define AT25DF321_MGF_ID				0x1F
 #define AT25DF321_DEVICDE_ID			0x47
 
+#define AT25DF321_BLK_MASK_PAGE			0xFFFFFF00
 #define AT25DF321_BLK_MASK_4K			0xFFFFF000
 #define AT25DF321_BLK_MASK_32K			0xFFFFC000
 #define AT25DF321_BLK_MASK_64K			0xFFFF8000
@@ -125,6 +126,7 @@ public:
 	void writeString(uint32_t address, const char*, int);
 
 	// individual reads
+	char read(uint32_t address);
 	void beginRead(uint32_t address);
 	char read(void);
 	void endRead(void);

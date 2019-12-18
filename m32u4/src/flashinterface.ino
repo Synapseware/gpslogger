@@ -1,9 +1,34 @@
 
+int isPageFree(uint32_t address)
+{
+	int freeFrom = 0;
+	uint8_t i = 0;
+	address &= AT25DF321_BLK_MASK_PAGE;
+	flash->beginRead(address);
+	while(1)
+	{
+		data = flash->read();
+		if (data != 0xFF)
+		{
+			freeFrom = address + i;
+			break;
+		}
+
+		i++;
+		if (i == 0)
+		{
+			freeFrom = address;
+			break;
+		}
+	}
+	flash->endRead();
+
+	return freeFrom;
+}
 
 /** TODO:  Improve this so it does a b-search and finds the first free address within a page.  */
-int32_t FindFirstFreeAddress(void)
+uint32_t findFirstFreeAddress(void)
 {
-	/*
 	if (!flash->isDeviceReady())
 	{
 		setErrLed();
@@ -19,6 +44,30 @@ int32_t FindFirstFreeAddress(void)
 	uint32_t address = 0;
 	uint32_t freefrom = 0;
 	int matches = 0;
+
+	// short-cut: if the first byte in flash is 0xFF, assume an empty device
+	char data = flash->read(0);
+	if (data == 0xFF)
+		return 0;
+
+	// start checking the first byte of each page.  If the page is free, check the whole page before it.
+	while (address < FLASH_TOTAL_SIZE)
+	{
+		address += 256;
+		data = flash->read(address);
+		if (data != 0xFF)
+			continue;
+
+		// found a page that appears to be empty.
+		if (isPageFree(address) == address)
+		{
+			// search the previous page for the first free position
+			freefrom = isPageFree(address - 256);
+			return freefrom;
+		}
+	}
+
+
 
 	flash->beginRead(address);
 	while (address < FLASH_TOTAL_SIZE)
@@ -50,8 +99,5 @@ int32_t FindFirstFreeAddress(void)
 	clearDbgLed();
 
 	return freefrom;
-	*/
-
-	return 0;
 }
 
