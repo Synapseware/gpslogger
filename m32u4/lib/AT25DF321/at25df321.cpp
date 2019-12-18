@@ -225,8 +225,6 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 
 	return true;
 }
-	
-
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Reads a byte of data from the current read location, and increments the read pointer
@@ -235,6 +233,19 @@ char FlashDriver::read(void)
 	// call the SPI read byte method
 	return (char) _spi->transfer(0);
 }
+
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Read a single byte of data from the given address
+char FlashDriver::read(uint32_t address)
+{
+	beginRead(address);
+	char data = read();
+	endRead();
+
+	return data;
+}
+
 
 // -------------------------------------------------------------------------------------------------------------------------
 // reads count bytes into the buffer and returns the number of bytes read
