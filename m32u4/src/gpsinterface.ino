@@ -14,10 +14,10 @@ bool hasMessage(void)
 
 // ----------------------------------------------------------------------------
 // Processes the current GPS sentence
-void processMessage(void)
+bool processMessage(void)
 {
 	size_t length = strnlen(message, sizeof(message));
-	if (length < 2 || length >= sizeof(message) - 1)
+	if (length < 5 || length >= sizeof(message) - 1)
 	{
 		resetReceiveBuffer();
 		return;
@@ -36,16 +36,22 @@ void processMessage(void)
 		Serial.print(message);
 		Serial.print(F("    Flags: "));
 		Serial.println(_flags, BIN);
-	}
-	else
-	{
-		//Serial.println();
+
+		char* p = strchr(message, ',');
+		if (p >= &message + length)
+		{
+			// p is outside of the buffer
+			return false;
+		}
+
+		if (('A' == *p))
+		{
+			strncpy(buffer, message, sizeof(buffer));
+			return true;
+		}
 	}
 
-	//Serial.print(F("< "));
-	//Serial.println(message);
-
-	resetReceiveBuffer();
+	return false;
 }
 
 

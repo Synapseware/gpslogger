@@ -102,6 +102,8 @@ typedef uint8_t STATE_t;
 #define STATE_INIT_START			31
 #define STATE_INIT_WATCH			32
 
+#define STATE_SAVE_NMEA				40
+
 // Flash processing
 #define STATE_FLASH_GET_FIRST_ADDR	60
 #define STATE_FLASH_WRITE_BUFFER	61
