@@ -1,4 +1,11 @@
 
+
+
+bool rewritePage()
+
+
+
+
 int isPageFree(uint32_t address)
 {
 	int freeFrom = 0;

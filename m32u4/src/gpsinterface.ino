@@ -3,6 +3,16 @@
 static flags_t _flags;
 static bool _hasMessage;
 
+void configureGpsPins(void)
+{
+	// Set FIX and PPS pins as input with pull-ups enabled
+	GPS_DDR &= ~(GPS_FIX_bm);
+	GPS_PORT |= (GPS_FIX_bm);
+
+	// Set EN pin as output and disable the GPS module
+	GPS_DDR |= (GPS_EN_bm);
+	GPS_PORT &= (GPS_EN_bm);
+}
 
 // ----------------------------------------------------------------------------
 // 
