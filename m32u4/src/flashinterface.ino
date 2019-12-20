@@ -7,7 +7,7 @@ int isPageFree(uint32_t address)
 	flash->beginRead(address);
 	while(1)
 	{
-		data = flash->read();
+		char data = flash->read();
 		if (data != 0xFF)
 		{
 			freeFrom = address + i;
@@ -25,6 +25,13 @@ int isPageFree(uint32_t address)
 
 	return freeFrom;
 }
+
+
+uint32_t findFirstFreeAddress_bsearch(void)
+{
+	uint16_t pages = FLASH_PAGE_COUNT;
+}
+
 
 /** TODO:  Improve this so it does a b-search and finds the first free address within a page.  */
 uint32_t findFirstFreeAddress(void)

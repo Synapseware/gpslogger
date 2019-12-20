@@ -121,7 +121,6 @@ void setup(void)
 	delay(5000);
 	Serial.println(F("Hello.  GPS logger here."));
 
-
 	// Disable the GPS
 	GPS_PORT &= ~(GPS_EN_bm);
 
@@ -265,30 +264,6 @@ void processLoggingFrequencyState(STATE_t* pstate, STATE_t next)
 
 
 // ----------------------------------------------------------------------------
-// Processes the saving of a sentence to the flash
-void processSaveDataToFlash(STATE_t* pstate, STATE_t next)
-{
-	static STATE_t state = STATE_START;
-	switch (state)
-	{
-		case STATE_START:
-			Serial.println(F("  saving NMEA sentence to flash"));
-
-			// Copy the sentence to be logged to the flash IO buffer
-			memset(buffer, 0, sizeof(buffer));
-			strncpy(buffer, message, sizeof(buffer));
-			state = STATE_FLASH_WRITE_BUFFER;
-			break;
-
-		case STATE_FLASH_WRITE_BUFFER:
-			*pstate = next;
-			state = STATE_START;
-			break;
-	}
-}
-
-
-// ----------------------------------------------------------------------------
 // Processes the logging frequency request
 void processVersionRequestState(STATE_t* pstate, STATE_t next)
 {
@@ -316,6 +291,30 @@ void processVersionRequestState(STATE_t* pstate, STATE_t next)
 
 
 // ----------------------------------------------------------------------------
+// Processes the saving of a sentence to the flash
+void processSaveDataToFlash(STATE_t* pstate, STATE_t next)
+{
+	static STATE_t state = STATE_START;
+	switch (state)
+	{
+		case STATE_START:
+			Serial.println(F("  saving NMEA sentence to flash"));
+
+			// Copy the sentence to be logged to the flash IO buffer
+			memset(buffer, 0, sizeof(buffer));
+			strncpy(buffer, message, sizeof(buffer));
+			state = STATE_FLASH_WRITE_BUFFER;
+			break;
+
+		case STATE_FLASH_WRITE_BUFFER:
+			*pstate = next;
+			state = STATE_START;
+			break;
+	}
+}
+
+
+// ----------------------------------------------------------------------------
 // 
 void loop(void)
 {
@@ -331,10 +330,10 @@ void loop(void)
 		processReceivedData(data);
 	}
 
-	if (hasMessage())
+	if (hasMessage() && processMessage())
 	{
-		processMessage();
-		return;
+		resetReceiveBuffer();
+		state = STATE_SAVE_NMEA;
 	}
 
 	// Set state if next state should be processed
@@ -372,6 +371,10 @@ void loop(void)
 
 		case STATE_VERSION_WAIT:
 			processVersionRequestState(&state, STATE_HALT);
+			break;
+
+		case STATE_SAVE_NMEA:
+			processSaveDataToFlash(&state, STATE_HALT);
 			break;
 
 		case STATE_FAILURE:
