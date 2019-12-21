@@ -82,16 +82,17 @@
 
 
 typedef uint8_t BLOCK_SIZE_t;
-#define BLOCK_SIZE_4k			1
-#define BLOCK_SIZE_32k			2
-#define BLOCK_SIZE_64k			3
-#define BLOCK_SIZE_ALL			4
+#define BLOCK_SIZE_256			1
+#define BLOCK_SIZE_4k			2
+#define BLOCK_SIZE_32k			3
+#define BLOCK_SIZE_64k			4
+#define BLOCK_SIZE_ALL			5
 
 
 class FlashDriver
 {
 public:
-	FlashDriver(uint8_t deviceAddress, SPIClass* spi);
+	FlashDriver(SPIClass* spi);
 
 	// valid device check
 	bool isValid(void);
@@ -114,38 +115,46 @@ public:
 	// check for previous programming error
 	bool programmingError(void);
 
+	// various erase functions (4k, 32k, 64k, chip)
 	bool erase(BLOCK_SIZE_t size, uint32_t address);
 
-	// individual writes
-	void beginWrite(uint32_t address);
+	// try stream-like operations
+	void open(void);
+	void close(void);
+
+	// read & write seek (device does not support dual IO stream)
+	void seekg(uint32_t address);
+	void seekp(uint32_t address);
+
+	// writes
+	void write(const char*, int);
 	void write(char data);
-	void endWrite(void);
 
-	// block writes
-	void write(uint32_t address, const char*, int);
-	void writeString(uint32_t address, const char*, int);
-
-	// individual reads
-	char read(uint32_t address);
-	void beginRead(uint32_t address);
+	// reads
+	int read(char*, int);
 	char read(void);
-	void endRead(void);
-
-	// block reads
-	int read(uint32_t address, char*, int);
-	int readString(uint32_t address, char*, int);
 
 
 private:
+	void beginWrite(uint32_t address);
+	void writeEnable(void);
+	void writeDisable(void);
+	void endWrite(void);
+
+	void writeSingle(char);
+	uint32_t write(uint32_t address, const char*, int, bool isString);
+
+	void beginRead(uint32_t address);
+	void endRead(void);
+
 	uint8_t readStatusRegister(void);
+
 	void setGlobalProtectState(uint8_t protect);
 
-	void writeEnable(void);
-	uint32_t write(uint32_t address, const char*, int, bool isString);
-	void writeDisable(void);
 
 	SPIClass* _spi;
-	uint8_t _deviceAddress;
+	uint32_t _seekg;
+	uint32_t _seekp;
 };
 
 
