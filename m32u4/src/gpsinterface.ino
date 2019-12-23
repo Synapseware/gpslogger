@@ -46,6 +46,7 @@ bool processMessage(void)
 		Serial.print(message);
 		Serial.print(F("    Flags: "));
 		Serial.println(_flags, BIN);
+		_hasMessage = false;
 
 		char* p = (char*) memchr(message, ',', sizeof(message));
 		if (('A' == *p))
@@ -57,6 +58,12 @@ bool processMessage(void)
 	return false;
 }
 
+// ----------------------------------------------------------------------------
+// Returns true if the current NMEA sentence indicates a fix
+bool hasFix(void)
+{
+	return false;
+}
 
 // ----------------------------------------------------------------------------
 // Processes special NMEA sentences

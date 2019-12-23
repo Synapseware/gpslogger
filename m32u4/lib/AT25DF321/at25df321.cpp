@@ -176,7 +176,7 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 	uint8_t mode = 0;
 	switch (blockSize)
 	{
-		case AT25DF321_BLK_MASK_PAGE:
+		case BLOCK_SIZE_256:
 			address &= AT25DF321_BLK_MASK_PAGE;
 			break;
 		case BLOCK_SIZE_4k:
@@ -237,6 +237,7 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 // Opens the device for a specific operation, and uses the current seek position
 bool FlashDriver::open(MODE_t mode)
 {
+	// open the device and use the current position
 	return open(mode, _position);
 }
 
@@ -292,6 +293,13 @@ void FlashDriver::seek(uint32_t position)
 	begin();
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+// Returns the current I/O position
+uint32_t FlashDriver::position(void)
+{
+
+	return _position;
+}
 
 // -------------------------------------------------------------------------------------------------------------------------
 // reads count bytes into the buffer and returns the number of bytes read
@@ -312,7 +320,6 @@ int FlashDriver::read(char* buffer, int count)
 	return count;
 }
 
-
 // -------------------------------------------------------------------------------------------------------------------------
 // Reads a byte of data from the current read location, and increments the read pointer
 int FlashDriver::read(void)
@@ -325,7 +332,6 @@ int FlashDriver::read(void)
 	// call the SPI read byte method
 	return _spi->transfer(0);
 }
-
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Writes a string to the flash, stopping at the null terminator (or count).
