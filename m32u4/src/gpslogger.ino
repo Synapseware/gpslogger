@@ -216,9 +216,26 @@ void processVersionRequestState(STATE_t* pstate, STATE_t next)
 }
 
 
+void processFindFlashOpenAddress(STATE_t* pstate, STATE_t next)
+{
+	static STATE_t state = STATE_START;
+	switch (state)
+	{
+		case STATE_START:
+			findFirstFreeAddress();
+			state = STATE_FLASH_FIND_OPEN;
+			break;
+		case STATE_FLASH_FIND_OPEN:
+			*pstate = next;
+			Serial.print(F("First address in flash: ")); Serial.println(currentWriteAddress());
+			break;
+	}
+}
+
+
 // ----------------------------------------------------------------------------
 // Processes the saving of a sentence to the flash
-void processSaveDataToFlash(STATE_t* pstate, STATE_t next)
+void processSaveNMEA(STATE_t* pstate, STATE_t next)
 {
 	static STATE_t state = STATE_START;
 	switch (state)
@@ -229,13 +246,13 @@ void processSaveDataToFlash(STATE_t* pstate, STATE_t next)
 			// Copy the sentence to be logged to the flash IO buffer
 			memset(buffer, 0, sizeof(buffer));
 			strncpy(buffer, message, sizeof(buffer));
-			state = STATE_FLASH_WRITE_BUFFER;
+			state = STATE_SAVE_NMEA_BUFFER;
 			break;
 
-		case STATE_FLASH_WRITE_BUFFER:
+		case STATE_SAVE_NMEA_BUFFER:
 			*pstate = next;
 			state = STATE_START;
-			Serial.println(buffer);
+			//Serial.println(buffer);
 			memset(buffer, 0, sizeof(buffer));
 			break;
 	}
@@ -262,7 +279,7 @@ void loop(void)
 	{
 		if (processMessage())
 		{
-			state = STATE_SAVE_NMEA;
+			state = STATE_SAVE_NMEA_WAIT;
 		}
 		else
 		{
@@ -304,11 +321,15 @@ void loop(void)
 			break;
 
 		case STATE_VERSION_WAIT:
-			processVersionRequestState(&state, STATE_HALT);
+			processVersionRequestState(&state, STATE_FLASH_FIND_WAIT);
 			break;
 
-		case STATE_SAVE_NMEA:
-			processSaveDataToFlash(&state, STATE_HALT);
+		case STATE_FLASH_FIND_WAIT:
+			processFindFlashOpenAddress(&state, STATE_HALT);
+			break;
+
+		case STATE_SAVE_NMEA_WAIT:
+			processSaveNMEA(&state, STATE_HALT);
 			break;
 
 		case STATE_FAILURE:

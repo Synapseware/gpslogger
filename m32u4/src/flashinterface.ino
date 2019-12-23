@@ -1,5 +1,11 @@
 
+uint32_t _writeAddress = 0;
 
+
+uint32_t currentWriteAddress(void)
+{
+	return _writeAddress;
+}
 
 
 /** TODO:  Improve this so it does a b-search and finds the first free address within a page.  */
@@ -66,15 +72,14 @@ int32_t findFirstFreeAddress(void)
 		}
 
 		// found our first free address
-		address = flash->position();
+		_writeAddress = flash->position();
 		Serial.print(F("Found the first free byte within the page at location ")); Serial.println(address);
 		break;
 	}
 
+	Serial.print(F("Found the first free address at ")); Serial.println(address);
 	flash->close();
-
 	clearDbgLed();
 
-	Serial.print(F("Found the first free address at ")); Serial.println(address);
 	return address;
 }

@@ -102,11 +102,15 @@ typedef uint8_t STATE_t;
 #define STATE_INIT_START			31
 #define STATE_INIT_WATCH			32
 
-#define STATE_SAVE_NMEA				40
-
 // Flash processing
-#define STATE_FLASH_GET_FIRST_ADDR	60
-#define STATE_FLASH_WRITE_BUFFER	61
+#define STATE_FLASH_FIND_WAIT		40
+#define STATE_FLASH_FIND_OPEN		41
+
+
+// NMEA saving 
+#define STATE_SAVE_NMEA_WAIT		50
+#define STATE_SAVE_NMEA_BUFFER		51
+
 
 // Version query
 #define STATE_VERSION_WAIT			100
