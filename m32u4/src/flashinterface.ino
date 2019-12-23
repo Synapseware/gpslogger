@@ -1,117 +1,80 @@
 
 
 
-bool rewritePage()
-
-
-
-
-int isPageFree(uint32_t address)
-{
-	int freeFrom = 0;
-	uint8_t i = 0;
-	address &= AT25DF321_BLK_MASK_PAGE;
-	flash->beginRead(address);
-	while(1)
-	{
-		char data = flash->read();
-		if (data != 0xFF)
-		{
-			freeFrom = address + i;
-			break;
-		}
-
-		i++;
-		if (i == 0)
-		{
-			freeFrom = address;
-			break;
-		}
-	}
-	flash->endRead();
-
-	return freeFrom;
-}
-
-
-uint32_t findFirstFreeAddress_bsearch(void)
-{
-	uint16_t pages = FLASH_PAGE_COUNT;
-}
-
 
 /** TODO:  Improve this so it does a b-search and finds the first free address within a page.  */
-uint32_t findFirstFreeAddress(void)
+int32_t findFirstFreeAddress(void)
 {
-	if (!flash->isDeviceReady())
+	Serial.println(F("Finding first free address"));
+	setDbgLed();
+
+	// Wait for device to not be busy
+	if (flash->busy())
 	{
+		Serial.println(F("Device is busy - waiting"));
 		setErrLed();
 
 		// wait for ready state
-		while (!flash->isDeviceReady());
-
+		while (!flash->busy());
 		clearErrLed();
 	}
 
-	setDbgLed();
-
-	uint32_t address = 0;
-	uint32_t freefrom = 0;
-	int matches = 0;
-
-	// short-cut: if the first byte in flash is 0xFF, assume an empty device
-	char data = flash->read(0);
-	if (data == 0xFF)
-		return 0;
+	Serial.println(F("Opening flash device for read at position 0"));
+	if (!flash->open(MODE_READ, 0))
+	{
+		Serial.println(F("Failed to open device for reading!"));
+		clearDbgLed();
+		return -1;
+	}
 
 	// start checking the first byte of each page.  If the page is free, check the whole page before it.
+	uint32_t address = 0;
 	while (address < FLASH_TOTAL_SIZE)
 	{
-		address += 256;
-		data = flash->read(address);
+		Serial.print(F("Checking the first byte of page ")); Serial.println(address);
+		flash->seek(address);
+		int data = flash->read();
+		if (data == -1)
+		{
+			Serial.print(F("Failed reading the first byte of ")); Serial.println(address);
+			setErrLed();
+			clearDbgLed();
+			return -1;
+		}
+
+		// If the first byte is not 0xFF, assume the page is not empty and skip to the next page
 		if (data != 0xFF)
+		{
+			Serial.println(F("Page is not empty"));
+			address += 256;
 			continue;
-
-		// found a page that appears to be empty.
-		if (isPageFree(address) == address)
-		{
-			// search the previous page for the first free position
-			freefrom = isPageFree(address - 256);
-			return freefrom;
 		}
+
+		// Since the first byte is not 0xFF, assume the page is not empty, and move back to the previous page
+		// and begin searching for the first free byte within that page
+		address -= 256;
+		Serial.print(F("Seeking to previous page, search within starting at ")); Serial.println(address);
+		flash->seek(address);
+
+		// found a page that appears to be empty, check the page before it to get the first free address
+		uint8_t count = 0;
+		while (++count != 0)
+		{
+			data = flash->read();
+			if (data == 0xFF)
+				break;
+		}
+
+		// found our first free address
+		address = flash->position();
+		Serial.print(F("Found the first free byte within the page at location ")); Serial.println(address);
+		break;
 	}
 
-
-
-	flash->beginRead(address);
-	while (address < FLASH_TOTAL_SIZE)
-	{
-		// look for the first 0xFF followed by 0xFF's to the end
-		char data = flash->read();
-
-		if (0xFF == data)
-		{
-			matches++;
-			if (freefrom < 0)
-				freefrom = address;
-		}
-		else
-		{
-			matches = 0;
-			freefrom = 0;
-		}
-
-		address++;
-
-		// 255 0xFF's is most likely a free page...
-		if (matches > 255)
-			break;
-	}
-
-	flash->endRead();
+	flash->close();
 
 	clearDbgLed();
 
-	return freefrom;
+	Serial.print(F("Found the first free address at ")); Serial.println(address);
+	return address;
 }
-

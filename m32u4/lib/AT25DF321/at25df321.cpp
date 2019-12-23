@@ -32,48 +32,15 @@
 FlashDriver::FlashDriver(SPIClass* spi)
 {
 	_spi = spi;
-
-	_seekg = 0;
-	_seekp = 0;
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// returns true if the WEL of the status register is set
-bool FlashDriver::isWriteEnabled(void)
-{
-	// checks WEL bit of the status register
-	return ((readStatusRegister() & AT25DF321_SREGMSK_WEL) != 0);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// returns true if the WPP of the status register is set
-bool FlashDriver::isWriteProtected(void)
-{
-	// check the WPP bit
-	return ((readStatusRegister() & AT25DF321_SREGMSK_WPP) != 0);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// returns true if the RDY/BSY bit is clear
-bool FlashDriver::isDeviceReady(void)
-{
-	// checks the RDY/BSY bit of the status register
-	return ((readStatusRegister() & AT25DF321_SREGMSK_RDYBSY) == 0);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// returns true if the EPE bit of is set
-bool FlashDriver::programmingError(void)
-{
-	// if bit 5 is clear, no error was detected so return true
-	return ((readStatusRegister() & AT25DF321_SREGMSK_EPE) != 0);
+	_mode = MODE_READ;
+	_position = 0;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns a 1 if the chip is an at25df321, 0 if not
-bool FlashDriver::isValid(void)
+bool FlashDriver::valid(void)
 {
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 
 	uint8_t
 		mfgid	= 0,
@@ -86,11 +53,59 @@ bool FlashDriver::isValid(void)
 	extinfo |= _spi->transfer(0);
 	extinfo |= _spi->transfer(0);
 
-	SPI_PORT |= (SPI_CS_bm);
+	close();
 
 	return mfgid == AT25DF321_MGF_ID &&
 		devid1 == AT25DF321_DEVICDE_ID &&
 		extinfo == 0;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// returns true if the WEL of the status register is set
+bool FlashDriver::enabled(void)
+{
+	// checks WEL bit of the status register
+	return ((readStatusRegister() & AT25DF321_SREGMSK_WEL) != 0);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// returns true if the WPP of the status register is set
+bool FlashDriver::disabled(void)
+{
+	// check the WPP bit
+	return ((readStatusRegister() & AT25DF321_SREGMSK_WPP) != 0);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// returns true if the RDY/BSY bit is clear
+bool FlashDriver::busy(void)
+{
+	// checks the RDY/BSY bit of the status register
+	return ((readStatusRegister() & AT25DF321_SREGMSK_RDYBSY) == 0);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Enable writes by setting the write enable bit in the device control register
+void FlashDriver::enable(void)
+{
+	// write 06h to the chip to enable the write mode
+	writeSingle(AT25DF321_WRITE_ENABLE);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Disables writes by clearing the write enable bit in the device control register
+void FlashDriver::disable(void)
+{
+	// write 04h to the chip to disable the write mode
+	writeSingle(AT25DF321_WRITE_DISABLE);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// returns true if the EPE bit of is set
+bool FlashDriver::error(void)
+{
+	// if bit 5 is clear, no error was detected so return true
+	return ((readStatusRegister() & AT25DF321_SREGMSK_EPE) != 0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -129,28 +144,28 @@ void FlashDriver::globalProtect(void)
 // Sets a sector as unprotected
 void FlashDriver::unprotectSector(uint8_t sector)
 {
-	writeEnable();
+	enable();
 
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 	_spi->transfer(AT25DF321_UNPROTECT_SECTOR);
 	_spi->transfer(sector & 0x3F);
 	_spi->transfer(0);
 	_spi->transfer(0);
-	SPI_PORT |= (SPI_CS_bm);
+	close();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Sets a sector as unprotected
 void FlashDriver::protectSector(uint8_t sector)
 {
-	writeEnable();
+	enable();
 
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 	_spi->transfer(AT25DF321_PROTECT_SECTOR);
 	_spi->transfer(sector & 0x3F);
 	_spi->transfer(0);
 	_spi->transfer(0);
-	SPI_PORT |= (SPI_CS_bm);
+	close();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -184,10 +199,10 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 			return false;
 	}
 
-	writeEnable();
+	enable();
 
 	// assert the CS pin again
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 
 	// send the mode byte, and optionall the address bytes if
 	// not a whole-chip erase
@@ -211,20 +226,43 @@ bool FlashDriver::erase(BLOCK_SIZE_t blockSize, uint32_t address)
 		}
 	}
 
-	SPI_PORT |= (SPI_CS_bm);
+	close();
 
-	writeDisable();
+	disable();
 
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+// Opens the device for a specific operation, and uses the current seek position
+bool FlashDriver::open(MODE_t mode)
+{
+	return open(mode, _position);
+}
 
 // -------------------------------------------------------------------------------------------------------------------------
-// Asserts the devices CS pin
-void FlashDriver::open(void)
+// Opens an SPI transaction with the device for the given mode, and seeks to the given position
+bool FlashDriver::open(MODE_t mode, uint32_t position)
 {
-	// initiate an SPI transaction by asserting the CS pin
-	SPI_PORT &= ~(SPI_CS_bm);
+	if (!(mode == MODE_READ || mode == MODE_WRITE))
+		return false;
+
+	// close any existing SPI transaction if we're switching modes
+	if (mode != _mode)
+	{
+		close();
+
+		// close any existing transaction
+		while(!busy());
+	}
+
+	_mode = mode;
+	_position = position;
+
+	// seek into a specific position
+	seek(_position);
+
+	return true;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -237,118 +275,21 @@ void FlashDriver::close(void)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Sets up the device to read from a specific location
-void FlashDriver::seekg(uint32_t address)
+void FlashDriver::seek(uint32_t position)
 {
+	_position = position;
+
 	if ((SPI_PORT & ~(SPI_CS_bm)) == 0)
 	{
 		// terminate any previous operation
 		close();
 
 		// wait for the device to become ready
-		while(!isDeviceReady());
+		while(!busy());
 	}
 
-	_seekg = address;
-
-	// begin an SPI transaction
-	open();
-
-	_spi->transfer(AT25DF321_READ_ARRAY_FAST);
-	_spi->transfer((address >> 16) & 0x3F);	// MSB address byte
-	_spi->transfer((address >> 8) & 0xFF);	// ---
-	_spi->transfer(address & 0xFF);			// LSB address write
-
-	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
-	_spi->transfer(0);
-}
-
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Sets up the device to write to a specific location
-void FlashDriver::seekp(uint32_t address)
-{
-	if ((SPI_PORT & ~(SPI_CS_bm)) == 0)
-	{
-		// terminate any previous operation
-		close()
-
-		// wait for the device to become ready
-		while(!isDeviceReady());
-	}
-
-	writeEnable();
-
-	_seekp = address;
-
-	// send the address	
-	SPI_PORT &= ~(SPI_CS_bm);
-	_spi->transfer(AT25DF321_BYTE_PAGE_PGM);
-	_spi->transfer((address >> 16) & 0x3F);	// MSB address byte
-	_spi->transfer((address >> 8) & 0xFF);	// ---
-	_spi->transfer(address & 0xFF);			// LSB address byte
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Writes a string to the flash, stopping at the null terminator (or count).
-void FlashDriver::write(const char* buffer, int count)
-{
-	int index = 0;
-	uint8_t page = 0;
-	uint8_t start = 256 - (_seekp % 256);
-
-	while (index < count)
-	{
-		char data = buffer[index++];
-
-		page++;
-		if (page == 0)
-		{
-			endWrite();
-
-			// make sure to complete a full page write before moving on,
-			// so we don't lose data or overwrite existing data by causing
-			// the devices internal buffer to overflow.
-			if (start != 0)
-			{
-				address += start;
-				start = 0;
-			}
-			else
-			{
-				address += 256;
-			}
-
-			// wait for programming to complete
-			while (!isDeviceReady());
-
-			beginWrite(address);
-		}
-
-		_seekp++;
-		_spi->transfer(data);
-	}
-
-	endWrite();
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Send a byte to the flash as part of a begin-write-end transaction
-void FlashDriver::write(char data)
-{
-	// caller has to call beginWrite(address) first!
-	_spi->transfer(data);
-	_seekp++;
-}
-
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Reads a byte of data from the current read location, and increments the read pointer
-char FlashDriver::read(void)
-{
-	_seekg++;
-
-	// call the SPI read byte method
-	return (char) _spi->transfer(0);
+	// commence reading/writing from the current seek location
+	begin();
 }
 
 
@@ -356,15 +297,92 @@ char FlashDriver::read(void)
 // reads count bytes into the buffer and returns the number of bytes read
 int FlashDriver::read(char* buffer, int count)
 {
+	if (_mode != MODE_READ)
+		return -1;
+
 	int index = 0;
 	while (index < count)
 	{
 		// clock in the data from the chip
 		buffer[index++] = _spi->transfer(0);
-		_seekg++;
 	}
 
-	return index;
+	_position += count;
+
+	return count;
+}
+
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Reads a byte of data from the current read location, and increments the read pointer
+int FlashDriver::read(void)
+{
+	if (_mode != MODE_READ)
+		return -1;
+
+	_position++;
+
+	// call the SPI read byte method
+	return _spi->transfer(0);
+}
+
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Writes a string to the flash, stopping at the null terminator (or count).
+int FlashDriver::write(const char* buffer, int count)
+{
+	if (_mode != MODE_WRITE)
+		return -1;
+
+	int index = 0;
+	uint8_t page = _position & 0xFF;
+
+	while (index < count)
+	{
+		_spi->transfer(buffer[index++]);
+		_position++;
+		page++;
+
+		if (page != 0)
+		{
+			// close this SPI transaction
+			close();
+
+			// wait for programming to complete
+			while (!busy());
+
+			// initiate another write sequence
+			seek(_position);
+		}
+	}
+
+	return count;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Send a byte to the flash as part of a begin-write-end transaction
+int FlashDriver::write(char data)
+{
+	if (_mode != MODE_WRITE)
+		return -1;
+
+	// caller has to call begin(address) first!
+	_spi->transfer(data);
+	_position++;
+
+	if ((_position & 0x0000FF) == 0)
+	{
+		// end the SPI transaction
+		close();
+
+		// wait for the transaction to finish
+		while(!busy());
+
+		// start a new SPI transaction
+		seek(_position);
+	}
+
+	return _position;
 }
 
 
@@ -376,88 +394,46 @@ int FlashDriver::read(char* buffer, int count)
 
 
 // -------------------------------------------------------------------------------------------------------------------------
-// Sets up the flash for a write operation and leaves the CS line asserted
-void FlashDriver::beginWrite(uint32_t address)
+// Sets up the device to read or write from the given address
+void FlashDriver::begin(void)
 {
-	writeEnable();
-
-	SPI_PORT &= ~(SPI_CS_bm);
-
-	address &= AT25DF321_ADDRESS_MASK;
+	_position &= AT25DF321_ADDRESS_MASK;
 
 	// send the address	
-	SPI_PORT &= ~(SPI_CS_bm);
-	_spi->transfer(AT25DF321_BYTE_PAGE_PGM);
-	_spi->transfer((address >> 16) & 0x3F);	// MSB address byte
-	_spi->transfer((address >> 8) & 0xFF);	// ---
-	_spi->transfer(address & 0xFF);			// LSB address byte
+	uint8_t type = _mode == MODE_READ
+		? AT25DF321_READ_ARRAY_FAST
+		: AT25DF321_BYTE_PAGE_PGM;
+
+	open();
+	_spi->transfer(type);
+	_spi->transfer((_position >> 16) & 0x3F);	// MSB address byte
+	_spi->transfer((_position >> 8) & 0xFF);	// ---
+	_spi->transfer(_position & 0xFF);			// LSB address byte
+
+	// if reading (and using 0x0B command), clock out a dummy byte to start the read sequence
+	if (_mode == MODE_READ)
+	{
+		_spi->transfer(0);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
-// Enable writes by setting the write enable bit in the device control register
-void FlashDriver::writeEnable(void)
-{
-	// write 06h to the chip to enable the write mode
-	writeSingle(AT25DF321_WRITE_ENABLE);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Disables writes by clearing the write enable bit in the device control register
-void FlashDriver::writeDisable(void)
-{
-	// write 04h to the chip to disable the write mode
-	writeSingle(AT25DF321_WRITE_DISABLE);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Ends a write transaction and de-asserts the CS line
-void FlashDriver::endWrite(void)
-{
-	writeDisable();
-	//
-	SPI_PORT |= (SPI_CS_bm);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Writes a single byte to the device via an atomic SPI transaction
+// Writes a single byte to the device via an atomic SPI transaction, used for sending commands
 void FlashDriver::writeSingle(char data)
 {
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 	_spi->transfer(data);
-	SPI_PORT |= (SPI_CS_bm);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Initiates a read-array command and leaves the CS line asserted
-void FlashDriver::beginRead(uint32_t address)
-{
-	SPI_PORT &= ~(SPI_CS_bm);
-
-	_spi->transfer(AT25DF321_READ_ARRAY_FAST);
-	_spi->transfer((address >> 16) & 0x3F);	// MSB address byte
-	_spi->transfer((address >> 8) & 0xFF);	// ---
-	_spi->transfer(address & 0xFF);			// LSB address write
-
-	// since we are using 0x0B clock mode, write a dummy byte (per datasheet)
-	_spi->transfer(0);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-// Ends the read operation by de-asserting the CS line
-void FlashDriver::endRead(void)
-{
-
-	SPI_PORT |= (SPI_CS_bm);
+	close();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 // returns the status register bytes
 uint8_t FlashDriver::readStatusRegister(void)
 {
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 	_spi->transfer(AT25DF321_READ_STATUS);
 	uint8_t status = _spi->transfer(0);
-	SPI_PORT |= (SPI_CS_bm);
+	close();
 
 	return status;
 }
@@ -466,12 +442,16 @@ uint8_t FlashDriver::readStatusRegister(void)
 // 
 void FlashDriver::setGlobalProtectState(uint8_t protect)
 {
-	// enable writes
-	writeEnable();
-
 	// issue global unprotect
-	SPI_PORT &= ~(SPI_CS_bm);
+	open();
 	_spi->transfer(AT25DF321_WRITE_STATUS);				// allow setting of the SPRL bit and the global protect/unprotect flags
 	_spi->transfer(protect);
-	SPI_PORT |= (SPI_CS_bm);
+	close();
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+// Asserts the devices CS pin
+void FlashDriver::open(void)
+{
+	SPI_PORT &= ~(SPI_CS_bm);
 }
