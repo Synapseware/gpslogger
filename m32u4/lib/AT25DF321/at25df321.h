@@ -88,14 +88,18 @@ typedef uint8_t BLOCK_SIZE_t;
 #define BLOCK_SIZE_64k			4
 #define BLOCK_SIZE_ALL			5
 
+typedef uint8_t MODE_t;
+#define MODE_READ				0
+#define MODE_WRITE				1
+
 
 class FlashDriver
 {
 public:
-	FlashDriver(SPIClass* spi);
+	FlashDriver(SPIClass*);
 
 	// valid device check
-	bool isValid(void);
+	bool valid(void);
 
 	// power saving
 	void suspend(void);
@@ -104,57 +108,50 @@ public:
 	// protections
 	void globalUnprotect(void);
 	void globalProtect(void);
-	void protectSector(uint8_t sector);
-	void unprotectSector(uint8_t sector);
+	void protectSector(uint8_t);
+	void unprotectSector(uint8_t);
 
 	// device state
-	bool isWriteEnabled(void);
-	bool isWriteProtected(void);
-	bool isDeviceReady(void);
+	bool enabled(void);
+	bool disabled(void);
+	bool busy(void);
+	void enable(void);
+	void disable(void);
 
 	// check for previous programming error
-	bool programmingError(void);
+	bool error(void);
 
 	// various erase functions (4k, 32k, 64k, chip)
-	bool erase(BLOCK_SIZE_t size, uint32_t address);
+	bool erase(BLOCK_SIZE_t, uint32_t);
 
-	// try stream-like operations
-	void open(void);
+	// 
+	bool open(MODE_t);
+	bool open(MODE_t, uint32_t);
 	void close(void);
 
-	// read & write seek (device does not support dual IO stream)
-	void seekg(uint32_t address);
-	void seekp(uint32_t address);
-
-	// writes
-	void write(const char*, int);
-	void write(char data);
+	// seek to a specific position within the device
+	void seek(uint32_t);
+	uint32_t position(void);
 
 	// reads
 	int read(char*, int);
-	char read(void);
+	int read(void);
+
+	// writes
+	int write(const char*, int);
+	int write(char);
 
 
 private:
-	void beginWrite(uint32_t address);
-	void writeEnable(void);
-	void writeDisable(void);
-	void endWrite(void);
-
+	void open(void);
+	void begin(void);
 	void writeSingle(char);
-	uint32_t write(uint32_t address, const char*, int, bool isString);
-
-	void beginRead(uint32_t address);
-	void endRead(void);
-
 	uint8_t readStatusRegister(void);
-
-	void setGlobalProtectState(uint8_t protect);
-
+	void setGlobalProtectState(uint8_t);
 
 	SPIClass* _spi;
-	uint32_t _seekg;
-	uint32_t _seekp;
+	uint32_t _position;
+	MODE_t _mode;
 };
 
 

@@ -30,13 +30,13 @@ bool processMessage(void)
 	if (length < 5 || length >= sizeof(message) - 1)
 	{
 		resetReceiveBuffer();
-		return;
+		return false;
 	}
 
 	if (processStateInfo())
 	{
 		resetReceiveBuffer();
-		return;
+		return false;
 	}
 
 	// we would normally save the sentence at this point, if it was the RMC data
@@ -47,16 +47,9 @@ bool processMessage(void)
 		Serial.print(F("    Flags: "));
 		Serial.println(_flags, BIN);
 
-		char* p = strchr(message, ',');
-		if (p >= &message + length)
-		{
-			// p is outside of the buffer
-			return false;
-		}
-
+		char* p = (char*) memchr(message, ',', sizeof(message));
 		if (('A' == *p))
 		{
-			strncpy(buffer, message, sizeof(buffer));
 			return true;
 		}
 	}
@@ -72,7 +65,7 @@ bool processStateInfo(void)
 	int length = strnlen(message, sizeof(message));
 	if (length < 2)
 	{
-		return false;
+		return true;
 	}
 
 	// Don't process GPRMC data

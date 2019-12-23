@@ -50,7 +50,7 @@ void setup(void)
 	// Disable the GPS
 	GPS_PORT &= ~(GPS_EN_bm);
 
-	flash = new FlashDriver(0, &SPI);
+	flash = new FlashDriver(&SPI);
 
 	sei();
 }
@@ -123,7 +123,7 @@ void processGpsInitialize(STATE_t* pstate, STATE_t next)
 
 // ----------------------------------------------------------------------------
 // Processes a basic start sequence
-void processRMCOnlyState(STATE_t* pstate, STATE_t next)
+void processSetLogLevel(STATE_t* pstate, STATE_t next)
 {
 	static STATE_t state = STATE_START;
 	switch (state)
@@ -157,7 +157,7 @@ void processRMCOnlyState(STATE_t* pstate, STATE_t next)
 
 // ----------------------------------------------------------------------------
 // Processes the logging frequency request
-void processLoggingFrequencyState(STATE_t* pstate, STATE_t next)
+void processSetLoggingFrequency(STATE_t* pstate, STATE_t next)
 {
 	static STATE_t state = STATE_START;
 	switch (state)
@@ -235,6 +235,8 @@ void processSaveDataToFlash(STATE_t* pstate, STATE_t next)
 		case STATE_FLASH_WRITE_BUFFER:
 			*pstate = next;
 			state = STATE_START;
+			Serial.println(buffer);
+			memset(buffer, 0, sizeof(buffer));
 			break;
 	}
 }
@@ -256,10 +258,16 @@ void loop(void)
 		processReceivedData(data);
 	}
 
-	if (hasMessage() && processMessage())
+	if (hasMessage())
 	{
-		resetReceiveBuffer();
-		state = STATE_SAVE_NMEA;
+		if (processMessage())
+		{
+			state = STATE_SAVE_NMEA;
+		}
+		else
+		{
+			resetReceiveBuffer();	
+		}
 	}
 
 	// Set state if next state should be processed
@@ -288,11 +296,11 @@ void loop(void)
 			break;
 
 		case STATE_RMCONLY_WAIT:
-			processRMCOnlyState(&state, STATE_PERIOD_WAIT);
+			processSetLogLevel(&state, STATE_PERIOD_WAIT);
 			break;
 
 		case STATE_PERIOD_WAIT:
-			processLoggingFrequencyState(&state, STATE_VERSION_WAIT);
+			processSetLoggingFrequency(&state, STATE_VERSION_WAIT);
 			break;
 
 		case STATE_VERSION_WAIT:
