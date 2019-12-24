@@ -55,7 +55,7 @@ int32_t findFirstFreeAddress(void)
 	uint32_t address = 0;
 	while (address < FLASH_TOTAL_SIZE)
 	{
-		Serial.print(F("Checking the first byte of page ")); Serial.println(address);
+		//Serial.print(F("  checking byte at address ")); Serial.println(address);
 		flash->seek(address);
 		int data = flash->read();
 		if (data == -1)
@@ -69,7 +69,6 @@ int32_t findFirstFreeAddress(void)
 		// If the first byte is not 0xFF, assume the page is not empty and skip to the next page
 		if (data != 0xFF)
 		{
-			Serial.println(F("Page is not empty"));
 			address += 256;
 			continue;
 		}
@@ -77,7 +76,7 @@ int32_t findFirstFreeAddress(void)
 		// Since the first byte is not 0xFF, assume the page is not empty, and move back to the previous page
 		// and begin searching for the first free byte within that page
 		address -= 256;
-		Serial.print(F("Seeking to previous page, search within starting at ")); Serial.println(address);
+		//Serial.print(F("  search within previous page ")); Serial.println(address);
 		flash->seek(address);
 
 		// found a page that appears to be empty, check the page before it to get the first free address
@@ -91,13 +90,12 @@ int32_t findFirstFreeAddress(void)
 
 		// found our first free address
 		_writeAddress = flash->position();
-		Serial.print(F("Found the first free byte within the page at location ")); Serial.println(address);
 		break;
 	}
 
-	Serial.print(F("Found the first free address at ")); Serial.println(address);
+	//Serial.print(F("Found the first free address at ")); Serial.println(_writeAddress);
 	flash->close();
 	clearDbgLed();
 
-	return address;
+	return _writeAddress;
 }
