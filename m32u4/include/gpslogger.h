@@ -5,9 +5,10 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
-//#include <GpsInterface.h>
 #include <HardwareSerial.h>
+#include <SPI.h>
 #include <Adafruit_GPS.h>
+#include <at25df321.h>
 
 
 // The error LED is used to indicate a hard/unrecoverable failure state
@@ -67,14 +68,12 @@
 
 // ----------------------------------------------------------------------------
 // State machine values
-typedef uint8_t state_t;
-#define STATE_NONE					0
-#define STATE_FAILURE				127
-#define STATE_HALT					126
-#define STATE_NEXT					125
+typedef uint8_t STATE_t;
+
 
 // Startup states
-#define STATE_STARTUP				1
+#define STATE_NONE					0
+#define STATE_START					1
 #define STATE_START_WAIT			2
 #define STATE_START_DONE			3
 
@@ -103,11 +102,25 @@ typedef uint8_t state_t;
 #define STATE_INIT_START			31
 #define STATE_INIT_WATCH			32
 
+// Flash processing
+#define STATE_FLASH_FIND_WAIT		40
+#define STATE_FLASH_FIND_OPEN		41
+
+
+// NMEA saving 
+#define STATE_SAVE_NMEA_WAIT		50
+#define STATE_SAVE_NMEA_BUFFER		51
+
+
 // Version query
 #define STATE_VERSION_WAIT			100
 #define STATE_VERSION_START			101
 #define STATE_VERSION_STARTING		102
 
+// Failure and done states
+#define STATE_FAILURE				127
+#define STATE_HALT					126
+#define STATE_NEXT					125
 
 // ----------------------------------------------------------------------------
 // These flags are used to determine what data we've received from the GPS
