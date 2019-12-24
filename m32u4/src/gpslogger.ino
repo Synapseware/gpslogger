@@ -1,100 +1,30 @@
 //#include <DataFlash.h>
 
 #include <gpslogger.h>
-#include <Adafruit_GPS.h>
+
 
 Adafruit_GPS* gps = NULL;
-
+FlashDriver* flash = NULL;
 
 static char version[24];
 static char message[128];
 static int messageIdx;
 
-static state_t _state;
+// Used to buffer the message when saving it to flash
+static char buffer[128];
+
+// State machine
+static STATE_t _state;
 
 // capture the tick flag from the timer file
 extern bool _secondsTick;
-
-
-
-// ----------------------------------------------------------------------------
-// Toggles the LED when the fix pin changes
-void toggleFixLed(void)
-{
-	static bool lastState = false;
-	bool currentState = (GPS_PINX & GPS_FIX_bm) != 0;
-
-	if (lastState == currentState)
-		return;
-
-	if (currentState)
-		setStaLed();
-	else
-		clearStaLed();
-
-	lastState = currentState;
-}
-
-
-// ----------------------------------------------------------------------------
-// Turns on the error LED
-void setErrLed(void)
-{
-
-	ERR_LED_PORT |= (ERR_LED_bm);
-}
-void clearErrLed(void)
-{
-
-	ERR_LED_PORT &= ~(ERR_LED_bm);
-}
-void setDbgLed(void)
-{
-
-	DBG_LED_PORT |= (DBG_LED_bm);
-}
-void clearDbgLed(void)
-{
-
-	DBG_LED_PORT &= ~(DBG_LED_bm);
-}
-void setStaLed(void)
-{
-
-	STA_LED_PORT |= (STA_LED_bm);
-}
-void clearStaLed(void)
-{
-
-	STA_LED_PORT &= ~(STA_LED_bm);
-}
-void configureLeds(void)
-{
-	ERR_LED_DDR |= (ERR_LED_bm);
-	DBG_LED_DDR |= (DBG_LED_bm);
-	STA_LED_DDR |= (STA_LED_bm);
-
-	clearErrLed();
-	clearDbgLed();
-	clearStaLed();
-}
-void configureGpsPins(void)
-{
-	// Set FIX and PPS pins as input with pull-ups enabled
-	GPS_DDR &= ~(GPS_FIX_bm);
-	GPS_PORT |= (GPS_FIX_bm);
-
-	// Set EN pin as output and disable the GPS module
-	GPS_DDR |= (GPS_EN_bm);
-	GPS_PORT &= (GPS_EN_bm);
-}
 
 
 // ----------------------------------------------------------------------------
 // 
 void setup(void)
 {
-	_state = STATE_STARTUP;
+	_state = STATE_START;
 	configureLeds();
 	configureGpsPins();
 	setupTimer3();
@@ -117,9 +47,12 @@ void setup(void)
 	delay(5000);
 	Serial.println(F("Hello.  GPS logger here."));
 
-
 	// Disable the GPS
 	GPS_PORT &= ~(GPS_EN_bm);
+
+	// SPI device(s)
+	SPI.begin();
+	flash = new FlashDriver(&SPI);
 
 	sei();
 }
@@ -127,13 +60,13 @@ void setup(void)
 
 // ----------------------------------------------------------------------------
 // Halts and waits for the GPS Fix line to toggle.  Ensures the module is ready.
-void processFixState(state_t* pstate, state_t next)
+void processFixState(STATE_t* pstate, STATE_t next)
 {
-	static state_t state = STATE_FIX_START;
+	static STATE_t state = STATE_START;
 	switch (state)
 	{
 		// Wait for the GPS Fix pin to be low
-		case STATE_FIX_START:
+		case STATE_START:
 			Serial.println(F("Waiting for fix line ready."));
 			GPS_PORT |= (GPS_EN_bm);
 			state = STATE_FIX_LOW_HIGH;
@@ -159,7 +92,7 @@ void processFixState(state_t* pstate, state_t next)
 			if (!(GPS_PINX & GPS_FIX_bm))
 			{
 				Serial.println(F("Fix line is active."));
-				state = STATE_FIX_START;
+				state = STATE_START;
 				*pstate = next;
 			}
 			break;
@@ -169,12 +102,12 @@ void processFixState(state_t* pstate, state_t next)
 
 // ----------------------------------------------------------------------------
 // Waits for the Complete and Init OK flags to be set
-void processGpsInitialize(state_t* pstate, state_t next)
+void processGpsInitialize(STATE_t* pstate, STATE_t next)
 {
-	static state_t state = STATE_INIT_START;
+	static STATE_t state = STATE_START;
 	switch (state)
 	{
-		case STATE_INIT_START:
+		case STATE_START:
 			Serial.println(F("Waiting for Init OK and Cold start flags"));
 			state = STATE_INIT_WATCH;
 			break;
@@ -182,7 +115,7 @@ void processGpsInitialize(state_t* pstate, state_t next)
 			if (hasStatus(FLAGS_INIT_OK) && hasStatus(FLAGS_START))
 			{
 				Serial.println(F("GPS initialization completed."));
-				state = STATE_INIT_START;
+				state = STATE_START;
 				*pstate = next;
 			}
 			break;
@@ -192,12 +125,12 @@ void processGpsInitialize(state_t* pstate, state_t next)
 
 // ----------------------------------------------------------------------------
 // Processes a basic start sequence
-void processRMCOnlyState(state_t* pstate, state_t next)
+void processSetLogLevel(STATE_t* pstate, STATE_t next)
 {
-	static state_t state = STATE_RMCONLY_START;
+	static STATE_t state = STATE_START;
 	switch (state)
 	{
-		case STATE_RMCONLY_START:
+		case STATE_START:
 			if (!hasStatus(FLAGS_OUTPUT_CHG))
 			{
 				Serial.println(F("  set log level to RMC only"));
@@ -216,7 +149,7 @@ void processRMCOnlyState(state_t* pstate, state_t next)
 			if (hasStatus(FLAGS_OUTPUT_CHG))
 			{
 				Serial.println(F("  done setting log level"));
-				state = STATE_RMCONLY_START;
+				state = STATE_START;
 				*pstate = next;
 			}
 			break;
@@ -226,12 +159,12 @@ void processRMCOnlyState(state_t* pstate, state_t next)
 
 // ----------------------------------------------------------------------------
 // Processes the logging frequency request
-void processLoggingFrequencyState(state_t* pstate, state_t next)
+void processSetLoggingFrequency(STATE_t* pstate, STATE_t next)
 {
-	static state_t state = STATE_PERIOD_START;
+	static STATE_t state = STATE_START;
 	switch (state)
 	{
-		case STATE_PERIOD_START:
+		case STATE_START:
 			if (!hasStatus(FLAGS_1HZ_OK))
 			{
 				Serial.println(F("  set logging frequency to 1Hz"));
@@ -250,7 +183,7 @@ void processLoggingFrequencyState(state_t* pstate, state_t next)
 			if (hasStatus(FLAGS_1HZ_OK))
 			{
 				Serial.println(F("  setting log frequency"));
-				state = STATE_PERIOD_START;
+				state = STATE_START;
 				*pstate = next;
 			}
 			break;
@@ -260,12 +193,12 @@ void processLoggingFrequencyState(state_t* pstate, state_t next)
 
 // ----------------------------------------------------------------------------
 // Processes the logging frequency request
-void processVersionRequestState(state_t* pstate, state_t next)
+void processVersionRequestState(STATE_t* pstate, STATE_t next)
 {
-	static state_t state = STATE_VERSION_START;
+	static STATE_t state = STATE_START;
 	switch (state)
 	{
-		case STATE_VERSION_START:
+		case STATE_START:
 			Serial.println(F("  ask for version"));
 			Serial1.println(F(PMTK_Q_RELEASE));
 
@@ -285,13 +218,56 @@ void processVersionRequestState(state_t* pstate, state_t next)
 }
 
 
+void processFindFlashOpenAddress(STATE_t* pstate, STATE_t next)
+{
+	static STATE_t state = STATE_START;
+	switch (state)
+	{
+		case STATE_START:
+			findFirstFreeAddress();
+			state = STATE_FLASH_FIND_OPEN;
+			break;
+		case STATE_FLASH_FIND_OPEN:
+			*pstate = next;
+			Serial.print(F("First address in flash: ")); Serial.println(currentWriteAddress());
+			break;
+	}
+}
+
+
+// ----------------------------------------------------------------------------
+// Processes the saving of a sentence to the flash
+void processSaveNMEA(STATE_t* pstate, STATE_t next)
+{
+	static STATE_t state = STATE_START;
+	switch (state)
+	{
+		case STATE_START:
+			Serial.println(F("  saving NMEA sentence to flash"));
+
+			// Copy the sentence to be logged to the flash IO buffer
+			memset(buffer, 0, sizeof(buffer));
+			strncpy(buffer, message, sizeof(buffer));
+			state = STATE_SAVE_NMEA_BUFFER;
+			break;
+
+		case STATE_SAVE_NMEA_BUFFER:
+			*pstate = next;
+			state = STATE_START;
+			//Serial.println(buffer);
+			memset(buffer, 0, sizeof(buffer));
+			break;
+	}
+}
+
+
 // ----------------------------------------------------------------------------
 // 
 void loop(void)
 {
 	static int count = 0;
-	static state_t nextState = STATE_NONE;
-	static state_t state = STATE_STARTUP;
+	static STATE_t nextState = STATE_NONE;
+	static STATE_t state = STATE_START;
 
 	toggleFixLed();
 
@@ -303,8 +279,14 @@ void loop(void)
 
 	if (hasMessage())
 	{
-		processMessage();
-		return;
+		if (processMessage())
+		{
+			state = STATE_SAVE_NMEA_WAIT;
+		}
+		else
+		{
+			resetReceiveBuffer();	
+		}
 	}
 
 	// Set state if next state should be processed
@@ -320,7 +302,7 @@ void loop(void)
 		case STATE_NONE:
 			break;
 
-		case STATE_STARTUP:
+		case STATE_START:
 			state = STATE_FIX_WAIT;
 			break;
 
@@ -333,15 +315,23 @@ void loop(void)
 			break;
 
 		case STATE_RMCONLY_WAIT:
-			processRMCOnlyState(&state, STATE_PERIOD_WAIT);
+			processSetLogLevel(&state, STATE_PERIOD_WAIT);
 			break;
 
 		case STATE_PERIOD_WAIT:
-			processLoggingFrequencyState(&state, STATE_VERSION_WAIT);
+			processSetLoggingFrequency(&state, STATE_VERSION_WAIT);
 			break;
 
 		case STATE_VERSION_WAIT:
-			processVersionRequestState(&state, STATE_HALT);
+			processVersionRequestState(&state, STATE_FLASH_FIND_WAIT);
+			break;
+
+		case STATE_FLASH_FIND_WAIT:
+			processFindFlashOpenAddress(&state, STATE_HALT);
+			break;
+
+		case STATE_SAVE_NMEA_WAIT:
+			processSaveNMEA(&state, STATE_HALT);
 			break;
 
 		case STATE_FAILURE:

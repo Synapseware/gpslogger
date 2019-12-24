@@ -3,6 +3,16 @@
 static flags_t _flags;
 static bool _hasMessage;
 
+void configureGpsPins(void)
+{
+	// Set FIX and PPS pins as input with pull-ups enabled
+	GPS_DDR &= ~(GPS_FIX_bm);
+	GPS_PORT |= (GPS_FIX_bm);
+
+	// Set EN pin as output and disable the GPS module
+	GPS_DDR |= (GPS_EN_bm);
+	GPS_PORT &= (GPS_EN_bm);
+}
 
 // ----------------------------------------------------------------------------
 // 
@@ -14,19 +24,19 @@ bool hasMessage(void)
 
 // ----------------------------------------------------------------------------
 // Processes the current GPS sentence
-void processMessage(void)
+bool processMessage(void)
 {
 	size_t length = strnlen(message, sizeof(message));
-	if (length < 2 || length >= sizeof(message) - 1)
+	if (length < 5 || length >= sizeof(message) - 1)
 	{
 		resetReceiveBuffer();
-		return;
+		return false;
 	}
 
 	if (processStateInfo())
 	{
 		resetReceiveBuffer();
-		return;
+		return false;
 	}
 
 	// we would normally save the sentence at this point, if it was the RMC data
@@ -36,18 +46,24 @@ void processMessage(void)
 		Serial.print(message);
 		Serial.print(F("    Flags: "));
 		Serial.println(_flags, BIN);
-	}
-	else
-	{
-		//Serial.println();
+		_hasMessage = false;
+
+		char* p = (char*) memchr(message, ',', sizeof(message));
+		if (('A' == *p))
+		{
+			return true;
+		}
 	}
 
-	//Serial.print(F("< "));
-	//Serial.println(message);
-
-	resetReceiveBuffer();
+	return false;
 }
 
+// ----------------------------------------------------------------------------
+// Returns true if the current NMEA sentence indicates a fix
+bool hasFix(void)
+{
+	return false;
+}
 
 // ----------------------------------------------------------------------------
 // Processes special NMEA sentences
@@ -56,7 +72,7 @@ bool processStateInfo(void)
 	int length = strnlen(message, sizeof(message));
 	if (length < 2)
 	{
-		return false;
+		return true;
 	}
 
 	// Don't process GPRMC data
