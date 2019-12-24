@@ -34,6 +34,13 @@ FlashDriver::FlashDriver(SPIClass* spi)
 	_spi = spi;
 	_mode = MODE_READ;
 	_position = 0;
+
+	// Set the SPI pin directions
+	SPI_DDR |= (SPI_CS_bm) | (SPI_SCK_bm) | (SPI_MOSI_bm);
+	SPI_DDR &= ~(SPI_MISO_bm);
+
+	// set default output states
+	SPI_PORT |= (SPI_CS_bm) | (SPI_SCK_bm) | (SPI_MOSI_bm) | (SPI_MISO_bm);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -81,7 +88,7 @@ bool FlashDriver::disabled(void)
 bool FlashDriver::busy(void)
 {
 	// checks the RDY/BSY bit of the status register
-	return ((readStatusRegister() & AT25DF321_SREGMSK_RDYBSY) == 0);
+	return ((readStatusRegister() & AT25DF321_SREGMSK_RDYBSY) != 0);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

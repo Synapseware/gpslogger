@@ -50,6 +50,8 @@ void setup(void)
 	// Disable the GPS
 	GPS_PORT &= ~(GPS_EN_bm);
 
+	// SPI device(s)
+	SPI.begin();
 	flash = new FlashDriver(&SPI);
 
 	sei();

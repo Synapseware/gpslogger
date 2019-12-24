@@ -1,4 +1,22 @@
 
+
+/*
+Hardware interface for AT25DF321:
+Since the Atmega32u4 is a 5v device, a TSX0108e logic-level bi-directional translator is used.
+The following ports map the SPI interface to the flash device:
+
+32u4	Pin		Tsx		Flash	Color
+-----	----	----	-----	-----
+SS(CS)	PB0		7		1		Purple
+SCK		PB1		5		6		Blue
+MOSI	PB2		6		5		Yellow
+MISO	PB3		8		2		Green
+
+
+*/
+
+
+
 uint32_t _writeAddress = 0;
 
 
