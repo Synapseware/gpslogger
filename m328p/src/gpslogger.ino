@@ -1,3 +1,4 @@
+/*
 #include <SdVolume.h>
 #include <SdStream.h>
 #include <SdSpi.h>
@@ -16,10 +17,15 @@
 #include <iostream.h>
 #include <ios.h>
 #include <bufstream.h>
+*/
+
+#include <SPI.h>
+#include "SdFat.h"
+#include "sdios.h"
 
 #include <avr/sleep.h>
 
-#include <ArduinoStream.h>
+//#include <ArduinoStream.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_GPS.h>
 #include "gpslogger.h"

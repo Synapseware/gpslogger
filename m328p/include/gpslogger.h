@@ -1,7 +1,7 @@
 #ifndef __GPSLOGGER__H_
 #define __GPSLOGGER__H_
 
-#include <Math.h>
+//#include <Math.h>
 #include <avr/wdt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
