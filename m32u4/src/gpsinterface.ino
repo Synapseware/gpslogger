@@ -3,6 +3,24 @@
 static flags_t _flags;
 static bool _hasMessage;
 
+/*
+static float _lastLat;
+static float _lastLong;
+
+struct NMEA_MSG
+{
+	bool Valid;
+	float Latitude;
+	float Longitude;
+	float UtcTime;
+	int UtcDate;
+	char LatDir;
+	char LatLong;
+	float Speed;
+	float Course;
+};
+*/
+
 void configureGpsPins(void)
 {
 	// Set FIX and PPS pins as input with pull-ups enabled
@@ -39,6 +57,18 @@ bool processMessage(void)
 		return false;
 	}
 
+	// Two GPRMC messages.  No fix, vs valid fix:
+	// $GPRMC,183333.727,V,,,,,0.81,149.00,231219,,,N*49
+	// $GPRMC,183334.727,A,4746.5339,N,12223.2518,W,2.26,119.01,231219,,,A*77
+	//           UTC        Lat          Lon        Spd  Cog     Date    Chksm
+	//	Position	47.775565°N
+	//	122.387530°W
+	//	Timestamp	Mon, 23 Dec 2019 18:33:34 UTC
+	//	Movement	Speed 2.3 kts, heading 119°
+	//	Close to	Woodway, United States
+	//	Local time	Mon, 23 Dec 2019 10:33:34 PST
+	//	Timezone	America/Los_Angeles (UTC -0800)
+
 	// we would normally save the sentence at this point, if it was the RMC data
 	if (strncmp_P(message, PSTR(PMTK_GPRMC_HEADER), strlen_P(PMTK_GPRMC_HEADER)) == 0)
 	{
@@ -58,12 +88,18 @@ bool processMessage(void)
 	return false;
 }
 
-// ----------------------------------------------------------------------------
-// Returns true if the current NMEA sentence indicates a fix
-bool hasFix(void)
+/*
+float getLatFromNmea(NMEA_MSG* nmea, const char* sentence)
 {
-	return false;
+	// http://aprs.gids.nl/nmea/
+	for (uint8_t i = 0; i < 13; i++)
+	{
+		char* p = strtok(sentence, ',');
+	}
+
+	return 0.0;
 }
+*/
 
 // ----------------------------------------------------------------------------
 // Processes special NMEA sentences
