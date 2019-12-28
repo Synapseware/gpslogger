@@ -1,23 +1,51 @@
 #ifndef __GPSLOGGER__H_
 #define __GPSLOGGER__H_
 
+<<<<<<< Updated upstream:m328p/include/gpslogger.h
 //#include <Math.h>
+=======
+#define F_CPU 16000000
+
+>>>>>>> Stashed changes:m328p/sketchbookfolder/gpslogger/gpslogger.h
 #include <avr/wdt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
-//#include <avr/interrupt.h>
-//#include <avr/iom328p.h>
+#include <avr/interrupt.h>
+
 
 
 //------------------------------------------------------------------------
 // Designate pins
-const int GPS_FIX			= 2; // input: no fix: 1hz pulse.  fix: 15s pulse high for 200ms
+//const int GPS_FIX			= 2; // input: no fix: 1hz pulse.  fix: 15s pulse high for 200ms
 const int GPS_TX			= 5; // 
 const int GPS_RX			= 6; // 
-const int DBG_LED			= 8; // LED which is sync'd to timer1
-const int SD_CS				= 10; // SD chipselect
-const int BATT_SENSE		= 0;
+//const int DBG_LED			= 8; // LED which is sync'd to timer1
+//const int SD_CS				= 10; // SD chipselect
+//const int BATT_SENSE		= 0;
 
+/*
+ * GPX_FIX    2     PD2
+ * GPX_TX     5     PD5
+ * GPX_RX     6     PD6
+ * DBG_LED    8     PB0 
+ * SD_CS      10    PB2
+ * BATT_SENSE n/a
+*/
+
+#define SD_PORT         PORTB
+#define SD_DDR          DDRB
+#define SD_CS           PORTB2
+
+#define DBG_LED_PORT    PORTB
+#define DBG_LED_DDR     DDRB
+#define DBG_LED         PORTB0
+
+#define GPS_PORT        PORTD
+#define GPS_DDR         DDRD
+#define GPS_PIN         PIND
+//#define GPS_TX          PORTD5
+//#define GPS_RX          PORTD6
+#define GPS_FIX         PORTD2
 
 //------------------------------------------------------------------------
 const uint16_t SECONDS_BETWEEN_RESETS	= 24 * 60 * 60;
@@ -50,10 +78,10 @@ const uint16_t FIX_TIMEOUT				= 120;
 // 5 minute timeout on backup mode
 #define PMTK_BACKUP_MODE		"$PMTK291,7,0,300000,1*0D"
 
-//#define print_enabled
+#define print_enabled
 
 #ifdef print_enabled
-	#define PRINT(x)		Serial.print(x)
+	#define PRINT(x)		  Serial.print(x)
 	#define PRINTLN(x)		Serial.println(x)
 #else
 	#define PRINT(x)

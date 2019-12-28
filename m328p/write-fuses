@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Ext crystal osc
+L_FUSE=0xFF
+# 8Mhz int R/C
+#L_FUSE=0xE2
+
+H_FUSE=0xD7
+
+# BOD 2.7v
+#E_FUSE=0xFD
+# BOD 1.8v 
+#E_FUSE=0xFE
+# BOD disabled
+E_FUSE=0xFF
+
+avrdude  -c usbtiny -p m328p -B 1 -U lfuse:w:$L_FUSE:m -U hfuse:w:$H_FUSE:m -U efuse:w:$E_FUSE:m
+
