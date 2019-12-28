@@ -25,12 +25,14 @@ bool initializeSDCard(void)
 		return false;
 
 #ifdef print_enabled
+/*
 	SdFile readme;
 	readme.open("README.txt");
 	int r;
 	while ((r = readme.read()) > 0)
 		PRINT((char)r);
 	readme.close();
+*/
 #endif
 
 	return true;

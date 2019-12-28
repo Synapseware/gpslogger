@@ -1,12 +1,6 @@
 #ifndef __GPSLOGGER__H_
 #define __GPSLOGGER__H_
 
-<<<<<<< Updated upstream:m328p/include/gpslogger.h
-//#include <Math.h>
-=======
-#define F_CPU 16000000
-
->>>>>>> Stashed changes:m328p/sketchbookfolder/gpslogger/gpslogger.h
 #include <avr/wdt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
@@ -48,14 +42,14 @@ const int GPS_RX			= 6; //
 #define GPS_FIX         PORTD2
 
 //------------------------------------------------------------------------
-const uint16_t SECONDS_BETWEEN_RESETS	= 24 * 60 * 60;
+const uint32_t SECONDS_BETWEEN_RESETS	= 86400UL;
 
 //------------------------------------------------------------------------
 // Heartbeat delays for normal and low battery conditions
 const uint16_t MILLIS_TO_BLINK			= 5;		// length of heartbeat
 const uint16_t MILLIS_BETWEEN_BLINK		= 10000;	// ms delay between heartbeats
 const uint16_t MILLIS_BATTERY_LOW		= 3000;		// ms delay between heartbeats
-const uint16_t LOW_BATTERY				= 951;		// 3.0v
+const int16_t  LOW_BATTERY				= 951;		// 3.0v
 
 
 //------------------------------------------------------------------------
