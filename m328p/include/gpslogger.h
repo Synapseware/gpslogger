@@ -15,7 +15,7 @@ const int GPS_TX			= 5; //
 const int GPS_RX			= 6; // 
 //const int DBG_LED			= 8; // LED which is sync'd to timer1
 //const int SD_CS				= 10; // SD chipselect
-//const int BATT_SENSE		= 0;
+const int BATT_SENSE		= 0;
 
 /*
  * GPX_FIX    2     PD2

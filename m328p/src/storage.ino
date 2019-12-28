@@ -71,6 +71,23 @@ char* generateFilename(char* fileName)
 }
 
 //------------------------------------------------------------------------
+// Converts the lat/long from the GPS module, which outputs in degrees-minute
+// format to the decimal-degrees format
+double convertDegMinToDecDeg(float degMin)
+{
+	double min = 0.0;
+	double decDeg = 0.0;
+
+	//get the minutes, fmod() requires double
+	min = fmod((double)degMin, 100.0);
+
+	//rebuild coordinates in decimal degrees
+	decDeg = (degMin / 100) + (min / 60);
+
+	return decDeg;
+}
+
+//------------------------------------------------------------------------
 // Dumps the parsed GPS data
 void printLogData(void)
 {

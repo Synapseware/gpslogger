@@ -6,8 +6,8 @@ volatile bool _gps_enabled		= true;
 void initializeGPS(void)
 {
 	// Configure GPS FIX sense pin
-	//GPS_DDR &= ~(1<<GPS_FIX);
-	//GPS_PORT |= (1<<GPS_FIX);
+	GPS_DDR &= ~(1<<GPS_FIX);
+	GPS_PORT |= (1<<GPS_FIX);
 
 	PRINTLN(F("GPS initializing"));
 
@@ -34,6 +34,7 @@ void initializeGPS(void)
 // pulls data off the GPS
 void spoolData(void)
 {
+	// just call read so we can spool off data from the ring buffer
 	GPS.read();
 }
 
@@ -44,6 +45,7 @@ void enableGPS(void)
 
 	GPS.sendCommand(PSTR(" "));
 
+	// wait for GPS to come back on?
 	while (GPS.read())
 		wdt_reset();
 
@@ -77,7 +79,7 @@ bool isEnabled(void)
 //------------------------------------------------------------------------
 // Parses the latest NMEA sentence and returns a pointer to the global
 // array if the parse was successful and we have a fix (otherwise null)
-char* parseGPSData(void)
+bool parseGPSData(void)
 {
 	memset(_nmeaSentence, 0, sizeof(_nmeaSentence)*sizeof(char));
 
@@ -88,13 +90,13 @@ char* parseGPSData(void)
 	strcpy(_nmeaSentence, GPS.lastNMEA());
 
 	if (!GPS.parse(_nmeaSentence))
-		return NULL;
+		return false;
 
 	if (!GPS.fix)
-		return NULL;
+		return false;
 
 	PRINT(F("NMEA: "));
 	PRINTLN(_nmeaSentence);
 
-	return _nmeaSentence;
+	return true;
 }

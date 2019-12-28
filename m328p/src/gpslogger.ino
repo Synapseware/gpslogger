@@ -25,7 +25,6 @@ SdFat sd;
 Sd2Card card;
 
 
-volatile bool		_processBatt		= false;
 volatile bool		_secondsTick		= false;
 volatile int		_battery			= 0;
 volatile uint16_t	_fixTimeout			= 0;
@@ -40,10 +39,13 @@ static char _fileName[64];				// buffer to store filename
 void (*reset)(void) = 0;
 
 
+//------------------------------------------------------------------------
 void ClearDbgLed(void)
 {
   DBG_LED_PORT |= (1<<DBG_LED);
 }
+
+//------------------------------------------------------------------------
 void SetDbgLed(void)
 {
   DBG_LED_PORT &= ~(1<<DBG_LED);
@@ -52,7 +54,6 @@ void SetDbgLed(void)
 //------------------------------------------------------------------------
 void initializeGlobals(void)
 {
-	_processBatt		= false;
 	_secondsTick		= false;
 	_fixTimeout			= FIX_TIMEOUT;
 	_recordingTimeout	= 10;
@@ -77,15 +78,6 @@ void initializeLogTimer(void)
 	TIMSK1	=	(1<<OCIE1A) | (1<<OCIE1B);
 	OCR1A	=	F_CPU/1024-1;		// 16MHz/1024/15625-1 = 15624
   OCR1B = 200;
-}
-
-//------------------------------------------------------------------------
-// Timer0 is already used for millis() - we'll just interrupt somewhere
-// in the middle and call the "Compare A" function
-void initializeMillsInt(void)
-{
-	OCR0A = 0xAF;
-	TIMSK0 |= _BV(OCIE0A);
 }
 
 //------------------------------------------------------------------------
@@ -116,8 +108,6 @@ void setup()
 
 	initializeLogTimer();
 
-	//initializeMillsInt();
-
 	// prepare GPS
 	//initializeGPS();
 
@@ -125,6 +115,9 @@ void setup()
 	//disableGPS();
 
 	// enable the watchdog timeout on 2 second intervals (this should be done via fuses...)
+	// Before this can be enabled, the GPS wait for sentence must be changed so that
+	// it does not block.  Basically, we need to bring over the state processing from
+	// the m32u4 branch
 	//wdt_enable(WDTO_2S);
 
 	//set_sleep_mode(SLEEP_MODE_IDLE);
@@ -137,12 +130,13 @@ void setup()
 	}
 #endif
 
-  ClearDbgLed();
+	ClearDbgLed();
 }
 
 //------------------------------------------------------------------------
 void loop()
 {
+	wdt_reset();
 	//spoolData();
 
 	if (_secondsTick)
@@ -154,7 +148,7 @@ void loop()
 
 	//processLog();
 
-	//processBattery();
+	processBattery();
 
 	//snooze();
 }
@@ -231,12 +225,13 @@ void processLog(void)
 	if (!isEnabled())
 		return;
 
-	char* nmeadata = NULL;
-	if (NULL == (nmeadata = parseGPSData()))
+	if (!parseGPSData())
+	{
 		return;
+	}
 
 	// we have good data - save it!
-	if (appendLogData(nmeadata))
+	if (appendLogData(_nmeaSentence))
 	{
 		PRINTLN(F("GPS Data saved!"));
 
@@ -254,71 +249,16 @@ void processLog(void)
 // BPM based on voltage (<3.0v = 3s, >3.0v = 10s)
 void processBattery(void)
 {
-	if (!_processBatt)
-		return;
-	_processBatt = false;
-
-	power_adc_enable();
-
-	// let ADC settle
-	delay(100);
-
 	// y = (418/1.3)x - 13
 	// 1.3v = 405
 	// 2.6v = 823
 	// 2.7v = 855
 	// 3.0v = 952
+	// 3.3v = 1023
 
-	//_battery = analogRead(BATT_SENSE);
-	//PRINT(F("Battery: "));
-	//PRINTLN(_battery);
-
-	// shutting off the ADC between battery samples saves around 2ma
-	power_adc_disable();
-}
-
-//------------------------------------------------------------------------
-// Converts the lat/long from the GPS module, which outputs in degrees-minute
-// format to the decimal-degrees format
-double convertDegMinToDecDeg (float degMin)
-{
-	double min = 0.0;
-	double decDeg = 0.0;
-
-	//get the minutes, fmod() requires double
-	min = fmod((double)degMin, 100.0);
-
-	//rebuild coordinates in decimal degrees
-	decDeg = (degMin / 100) + (min / 60);
-
-	return decDeg;
-}
-
-//------------------------------------------------------------------------
-// We intercept the existing timer0 to pull data from the GPS module
-ISR(TIMER0_COMPA_vect)
-{
-	wdt_reset();
-
-	static unsigned long lastTick = 0;
-	//spoolData();
-
-	if (lastTick == 0)
-	{
-		_processBatt = true;
-	}
-
-	lastTick++;
-	if (_battery > LOW_BATTERY)
-	{
-		if (lastTick > MILLIS_BETWEEN_BLINK)
-			lastTick = 0;
-	}
-	else
-	{
-		if (lastTick > MILLIS_BATTERY_LOW)
-			lastTick = 0;
-	}
+	_battery = analogRead(BATT_SENSE);
+	PRINT(F("Battery: "));
+	PRINTLN(_battery);
 }
 
 //------------------------------------------------------------------------
@@ -327,7 +267,7 @@ ISR(TIMER1_COMPA_vect)
 {
 	wdt_reset();
 
-	//ClearDbgLed();
+	ClearDbgLed();
 
 	// signal seconds ticker
 	_secondsTick = true;
@@ -335,5 +275,5 @@ ISR(TIMER1_COMPA_vect)
 
 ISR(TIMER1_COMPB_vect)
 {
-	//SetDbgLed();
+	SetDbgLed();
 }
