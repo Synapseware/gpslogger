@@ -4,25 +4,25 @@
 #include <avr/power.h>
 
 // Arduino Libraries
-#include <SPI.h>
-#include <SoftwareSerial.h>
+//#include <SPI.h>
+//#include <SoftwareSerial.h>
 
 // Adafruit GPS Library
-#include <Adafruit_GPS.h>
+//#include <Adafruit_GPS.h>
 
 // SdFat - Adafruit Fork
-#include <SdFat.h>
-#include "sdios.h"
+//#include <SdFat.h>
+//#include "sdios.h"
 
 // Project includes
 #include "gpslogger.h"
 
 // Globals
-SoftwareSerial GpsSerial(GPS_RX, GPS_TX); // RX, TX
-Adafruit_GPS GPS(&GpsSerial);
+//SoftwareSerial GpsSerial(GPS_RX, GPS_TX); // RX, TX
+//Adafruit_GPS GPS(&GpsSerial);
 
-SdFat sd;
-Sd2Card card;
+//SdFat sd;
+//Sd2Card card;
 
 
 volatile bool		_secondsTick		= false;
@@ -36,19 +36,19 @@ static char _nmeaSentence[120];			// buffer to store NMEA sentence.
 static char _fileName[64];				// buffer to store filename
 
 
-void (*reset)(void) = 0;
+//void (*reset)(void) = 0;
 
 
 //------------------------------------------------------------------------
 void ClearDbgLed(void)
 {
-  DBG_LED_PORT |= (1<<DBG_LED);
+	DBG_LED_PORT |= (1<<DBG_LED);
 }
 
 //------------------------------------------------------------------------
 void SetDbgLed(void)
 {
-  DBG_LED_PORT &= ~(1<<DBG_LED);
+	DBG_LED_PORT &= ~(1<<DBG_LED);
 }
 
 //------------------------------------------------------------------------
@@ -58,6 +58,8 @@ void initializeGlobals(void)
 	_fixTimeout			= FIX_TIMEOUT;
 	_recordingTimeout	= 10;
 	_lastReset			= SECONDS_BETWEEN_RESETS;
+	memset(_nmeaSentence, 0, sizeof(_nmeaSentence));
+	memset(_fileName, 0, sizeof(_fileName));
 }
 
 //------------------------------------------------------------------------
@@ -76,32 +78,34 @@ void initializeLogTimer(void)
 
 	TCCR1C	=	0;
 	TIMSK1	=	(1<<OCIE1A) | (1<<OCIE1B);
-	OCR1A	=	F_CPU/1024-1;		// 16MHz/1024/15625-1 = 15624
-  OCR1B = 200;
+	OCR1A	=	(F_CPU/1024*3)-1;		// 16MHz/1024/15625-1 = 15624
+	OCR1B	=	50;
 }
 
 //------------------------------------------------------------------------
-void setup()
+void setup(void)
 {
-	wdt_disable();
+	//wdt_disable();
 
 	initializeGlobals();
 
 	// Configure the SD card chip-select pin
-	SD_PORT |= (1<<SD_CS);
-	SD_DDR |= (1<<SD_CS);
+	//SD_PORT |= (1<<SD_CS);
+	//SD_DDR |= (1<<SD_CS);
 
 	// Configure the debug LED
 	DBG_LED_DDR |= (1<<DBG_LED);
 
 	SetDbgLed();
 
+	delay(1000);
+
 	// Don't leave this behind for prodution builds!
 #ifdef print_enabled
-	Serial.begin(9600);
-	delay(3000);
-	PRINTLN(F("GPS Logger Setup"));
-	PRINTLN(F("Version 2020"));
+	//Serial.begin(9600);
+	//delay(3000);
+	//PRINTLN(F("GPS Logger Setup"));
+	//PRINTLN(F("Version 2020"));
 #endif
 
 	//initializeSDCard();
@@ -123,32 +127,34 @@ void setup()
 	//set_sleep_mode(SLEEP_MODE_IDLE);
 
 #ifdef print_enabled
+	/*
 	if (FIX_TIMEOUT >= RECORDING_TIMEOUT)
 	{
 		PRINTLN(F("FIX_TIMEOUT must be less than RECORDING_TIMEOUT.  ERROR."));
 		while(1);
 	}
+	*/
 #endif
 
 	ClearDbgLed();
 }
 
 //------------------------------------------------------------------------
-void loop()
+void loop(void)
 {
-	wdt_reset();
+	//wdt_reset();
 	//spoolData();
 
-	if (_secondsTick)
-	{
-		PRINTLN(F("Processing..."));
+	//if (_secondsTick)
+	//{
+		//PRINTLN(F("Processing..."));
 		//processLifespan();
-		_secondsTick = false;
-	}
+		//_secondsTick = false;
+	//}
 
 	//processLog();
 
-	processBattery();
+	//processBattery();
 
 	//snooze();
 }
@@ -157,15 +163,16 @@ void loop()
 // shut down while we wait for a wake-up event
 void snooze(void)
 {
-	sleep_enable();
-	sleep_cpu();
-	sleep_disable();
+	//sleep_enable();
+	//sleep_cpu();
+	//sleep_disable();
 }
 
 //------------------------------------------------------------------------
 // performs wake/sleep timeouts
 void processLifespan(void)
 {
+	/*
 	if (_lastReset > 0)
 		_lastReset--;
 
@@ -216,11 +223,13 @@ void processLifespan(void)
 			return;
 		}
 	}
+	*/
 }
 
 //------------------------------------------------------------------------
 void processLog(void)
 {
+	/*
 	// don't do anything if we aren't supposed to yet
 	if (!isEnabled())
 		return;
@@ -231,7 +240,7 @@ void processLog(void)
 	}
 
 	// we have good data - save it!
-	if (appendLogData(_nmeaSentence))
+	if (appendLogData(_nmeaSentence, sizeof(_nmeaSentence))
 	{
 		PRINTLN(F("GPS Data saved!"));
 
@@ -242,6 +251,7 @@ void processLog(void)
 	{
 		PRINTLN(F("Failed to save GPS data"));
 	}
+	*/
 }
 
 //------------------------------------------------------------------------
@@ -256,24 +266,26 @@ void processBattery(void)
 	// 3.0v = 952
 	// 3.3v = 1023
 
-	_battery = analogRead(BATT_SENSE);
-	PRINT(F("Battery: "));
-	PRINTLN(_battery);
+	//_battery = analogRead(BATT_SENSE);
+	//PRINT(F("Battery: "));
+	//PRINTLN(_battery);
 }
 
 //------------------------------------------------------------------------
 // Timer which runs at a 1 second interrupt rate
 ISR(TIMER1_COMPA_vect)
 {
-	wdt_reset();
+	//wdt_reset();
 
-	ClearDbgLed();
+	SetDbgLed();
 
 	// signal seconds ticker
-	_secondsTick = true;
+	//_secondsTick = true;
 }
 
+//------------------------------------------------------------------------
+// 
 ISR(TIMER1_COMPB_vect)
 {
-	SetDbgLed();
+	ClearDbgLed();
 }

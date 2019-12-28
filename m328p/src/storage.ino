@@ -4,6 +4,7 @@
 // Configures the SD card and SPI interface
 bool initializeSDCard(void)
 {
+	/*
 	// set date time callback function
 	SdFile::dateTimeCallback(dateTime);
 
@@ -25,16 +26,14 @@ bool initializeSDCard(void)
 		return false;
 
 #ifdef print_enabled
-/*
-	SdFile readme;
-	readme.open("README.txt");
-	int r;
-	while ((r = readme.read()) > 0)
-		PRINT((char)r);
-	readme.close();
-*/
+	//SdFile readme;
+	//readme.open("README.txt");
+	//int r;
+	//while ((r = readme.read()) > 0)
+	//	PRINT((char)r);
+	//readme.close();
 #endif
-
+	*/
 	return true;
 }
 
@@ -47,10 +46,10 @@ void dateTime(uint16_t* date, uint16_t* time)
 	// clock in real callback function
 
 	// return date using FAT_DATE macro to format fields
-	*date = FAT_DATE(GPS.year, GPS.month, GPS.day);
+	//*date = FAT_DATE(GPS.year, GPS.month, GPS.day);
 
 	// return time using FAT_TIME macro to format fields
-	*time = FAT_TIME(GPS.hour, GPS.minute, GPS.seconds);
+	//*time = FAT_TIME(GPS.hour, GPS.minute, GPS.seconds);
 }
 
 //------------------------------------------------------------------------
@@ -58,6 +57,7 @@ void dateTime(uint16_t* date, uint16_t* time)
 // valid date exists (GPS doesn't have a fix)
 char* generateFilename(char* fileName)
 {
+	/*
 	if (!GPS.fix)
 		return NULL;
 
@@ -67,6 +67,7 @@ char* generateFilename(char* fileName)
 		GPS.month,
 		GPS.day);
 
+	*/
 	return fileName;
 }
 
@@ -75,6 +76,7 @@ char* generateFilename(char* fileName)
 // format to the decimal-degrees format
 double convertDegMinToDecDeg(float degMin)
 {
+	/*
 	double min = 0.0;
 	double decDeg = 0.0;
 
@@ -85,12 +87,15 @@ double convertDegMinToDecDeg(float degMin)
 	decDeg = (degMin / 100) + (min / 60);
 
 	return decDeg;
+	*/
+	return 0.0;
 }
 
 //------------------------------------------------------------------------
 // Dumps the parsed GPS data
 void printLogData(void)
 {
+	/*
 	PRINT("\nTime: ");
 	PRINT(GPS.hour); PRINT(':');
 	PRINT(GPS.minute); PRINT(':');
@@ -115,13 +120,15 @@ void printLogData(void)
 	PRINT("Angle: "); PRINTLN(GPS.angle);
 	PRINT("Altitude: "); PRINTLN(GPS.altitude);
 	PRINT("Satellites: "); PRINTLN((int)GPS.satellites);
+	*/
 }
 
 //------------------------------------------------------------------------
 // Saves the NMEA sentence buffer to the daily log file
-bool appendLogData(const char* nmeadata)
+bool appendLogData(const char* nmeadata, size_t length)
 {
-	if (NULL == nmeadata)
+	/*
+	if (NULL == nmeadata || length == 0)
 		return false;
 
 	char* fileName = generateFilename(_fileName);
@@ -149,5 +156,7 @@ bool appendLogData(const char* nmeadata)
 	printLogData();
 
 	return true;
+	*/
+	return false;
 }
 

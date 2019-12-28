@@ -5,6 +5,7 @@ volatile bool _gps_enabled		= true;
 //------------------------------------------------------------------------
 void initializeGPS(void)
 {
+	/*
 	// Configure GPS FIX sense pin
 	GPS_DDR &= ~(1<<GPS_FIX);
 	GPS_PORT |= (1<<GPS_FIX);
@@ -28,6 +29,7 @@ void initializeGPS(void)
 	GPS.sendCommand(PSTR(PMTK_SET_NMEA_UPDATE_1HZ));
 
 	PRINTLN(F("GPS configured"));
+	*/
 }
 
 //------------------------------------------------------------------------
@@ -35,12 +37,13 @@ void initializeGPS(void)
 void spoolData(void)
 {
 	// just call read so we can spool off data from the ring buffer
-	GPS.read();
+	//GPS.read();
 }
 
 //------------------------------------------------------------------------
 void enableGPS(void)
 {
+	/*
 	PRINTLN(F("Enabling GPS"));
 
 	GPS.sendCommand(PSTR(" "));
@@ -50,11 +53,13 @@ void enableGPS(void)
 		wdt_reset();
 
 	_gps_enabled = true;
+	*/
 }
 
 //------------------------------------------------------------------------
 void disableGPS(void)
 {
+	/*
 	PRINTLN(F("Disabling GPS"));
 	_gps_enabled = false;
 
@@ -68,21 +73,23 @@ void disableGPS(void)
 
 	delay(10);
 	GPS.sendCommand(PSTR(PMTK_STANDBY));
+	*/
 }
 
 //------------------------------------------------------------------------
 bool isEnabled(void)
 {
-	return _gps_enabled;
+	//return _gps_enabled;
+	return false;
 }
 
 //------------------------------------------------------------------------
 // Parses the latest NMEA sentence and returns a pointer to the global
 // array if the parse was successful and we have a fix (otherwise null)
 bool parseGPSData(void)
-{
-	memset(_nmeaSentence, 0, sizeof(_nmeaSentence)*sizeof(char));
-
+{	
+	memset(_nmeaSentence, 0, sizeof(_nmeaSentence));
+	/*
 	// block while we wait for GPS data
 	GPS.waitForSentence(PSTR("$GPRMC,"));
 
@@ -99,4 +106,6 @@ bool parseGPSData(void)
 	PRINTLN(_nmeaSentence);
 
 	return true;
+	*/
+	return false;
 }

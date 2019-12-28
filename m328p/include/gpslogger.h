@@ -10,11 +10,8 @@
 
 //------------------------------------------------------------------------
 // Designate pins
-//const int GPS_FIX			= 2; // input: no fix: 1hz pulse.  fix: 15s pulse high for 200ms
-const int GPS_TX			= 5; // 
-const int GPS_RX			= 6; // 
-//const int DBG_LED			= 8; // LED which is sync'd to timer1
-//const int SD_CS				= 10; // SD chipselect
+const int GPS_TX			= 5;
+const int GPS_RX			= 6;
 const int BATT_SENSE		= 0;
 
 /*
@@ -26,6 +23,8 @@ const int BATT_SENSE		= 0;
  * BATT_SENSE n/a
 */
 
+// We don't want to use Arduino's heavy-handed port manip code for something
+// that takes only a byte or two with direct port access
 #define SD_PORT         PORTB
 #define SD_DDR          DDRB
 #define SD_CS           PORTB2
@@ -37,8 +36,6 @@ const int BATT_SENSE		= 0;
 #define GPS_PORT        PORTD
 #define GPS_DDR         DDRD
 #define GPS_PIN         PIND
-//#define GPS_TX          PORTD5
-//#define GPS_RX          PORTD6
 #define GPS_FIX         PORTD2
 
 //------------------------------------------------------------------------
@@ -72,7 +69,7 @@ const uint16_t FIX_TIMEOUT				= 120;
 // 5 minute timeout on backup mode
 #define PMTK_BACKUP_MODE		"$PMTK291,7,0,300000,1*0D"
 
-#define print_enabled
+//#define print_enabled
 
 #ifdef print_enabled
 	#define PRINT(x)		  Serial.print(x)
