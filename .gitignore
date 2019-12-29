@@ -56,3 +56,6 @@ private/
 
 #Ignore helper files
 burn.bat
+
+**.pio
+
