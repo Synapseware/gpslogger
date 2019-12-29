@@ -5,10 +5,10 @@
 
 // Arduino Libraries
 //#include <SPI.h>
-//#include <SoftwareSerial.h>
+#include <SoftwareSerial.h>
 
 // Adafruit GPS Library
-//#include <Adafruit_GPS.h>
+#include <Adafruit_GPS.h>
 
 // SdFat - Adafruit Fork
 //#include <SdFat.h>
@@ -64,7 +64,7 @@ void initializeGlobals(void)
 
 //------------------------------------------------------------------------
 // Configures timer1 (16 bit timer) so it generates an interrupt every
-// second.  Resolution is about 63kc.  Used for timing the FIX signal
+// second.  Resolution is about 63kc.
 void initializeLogTimer(void)
 {
 	TCCR1A	=	(0<<WGM11)	|
@@ -78,7 +78,7 @@ void initializeLogTimer(void)
 
 	TCCR1C	=	0;
 	TIMSK1	=	(1<<OCIE1A) | (1<<OCIE1B);
-	OCR1A	=	(F_CPU/1024*3)-1;		// 16MHz/1024/15625-1 = 15624
+	OCR1A	=	(F_CPU/1024)-1;		// 16MHz/1024/15625-1 = 15624
 	OCR1B	=	50;
 }
 
@@ -89,6 +89,11 @@ void setup(void)
 
 	initializeGlobals();
 
+	// Ensure USART pullups
+	DDRD &= ~(1<<PD0);
+	DDRD |= (1<<PD1);
+	PORTD |= (1<<PD0) | (1<<PD1);
+
 	// Configure the SD card chip-select pin
 	//SD_PORT |= (1<<SD_CS);
 	//SD_DDR |= (1<<SD_CS);
@@ -98,19 +103,15 @@ void setup(void)
 
 	SetDbgLed();
 
-	delay(1000);
-
 	// Don't leave this behind for prodution builds!
 #ifdef print_enabled
-	//Serial.begin(9600);
-	//delay(3000);
-	//PRINTLN(F("GPS Logger Setup"));
-	//PRINTLN(F("Version 2020"));
+	Serial.begin(9600);
+	delay(500);
 #endif
+	PRINTLN(F("GPS Logger Setup"));
+	PRINTLN(F("Version 2020"));
 
 	//initializeSDCard();
-
-	initializeLogTimer();
 
 	// prepare GPS
 	//initializeGPS();
@@ -137,6 +138,9 @@ void setup(void)
 #endif
 
 	ClearDbgLed();
+
+	// 
+	initializeLogTimer();
 }
 
 //------------------------------------------------------------------------
@@ -145,12 +149,12 @@ void loop(void)
 	//wdt_reset();
 	//spoolData();
 
-	//if (_secondsTick)
-	//{
-		//PRINTLN(F("Processing..."));
+	if (_secondsTick)
+	{
+		PRINTLN(F("Processing..."));
 		//processLifespan();
-		//_secondsTick = false;
-	//}
+		_secondsTick = false;
+	}
 
 	//processLog();
 
@@ -280,7 +284,7 @@ ISR(TIMER1_COMPA_vect)
 	SetDbgLed();
 
 	// signal seconds ticker
-	//_secondsTick = true;
+	_secondsTick = true;
 }
 
 //------------------------------------------------------------------------

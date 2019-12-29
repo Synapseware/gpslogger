@@ -69,7 +69,7 @@ const uint16_t FIX_TIMEOUT				= 120;
 // 5 minute timeout on backup mode
 #define PMTK_BACKUP_MODE		"$PMTK291,7,0,300000,1*0D"
 
-//#define print_enabled
+#define print_enabled
 
 #ifdef print_enabled
 	#define PRINT(x)		  Serial.print(x)
