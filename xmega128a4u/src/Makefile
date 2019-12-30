@@ -23,6 +23,7 @@ FUSE_5			= 0xFF
 OPTIMIZATION	= s
 TARGET			= gpslogger
 SRC				= $(TARGET).c \
+				Board/hal.c \
 				Drivers/flash.c \
 				Drivers/Descriptors.c \
 				Drivers/NMEAParser.c \

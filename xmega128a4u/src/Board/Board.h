@@ -78,7 +78,6 @@
     #define GPS_UART      USARTD0
     #define GPS_port      PORTD
     #define GPS_port_ISR  PORTD_INT0_vect
-    #define GPS_PPS_pin   PIN1_bm
     #define GPS_TX_pin    PIN2_bm
     #define GPS_RX_pin    PIN3_bm
     #define GPS_EN_pin    PIN4_bm
@@ -120,7 +119,16 @@
     #define LCD_BAUD      100000
 
     // USB info
-    #define USB_TASK_ISR  TCC1_CCA_vect
+    #define USB_TASK_ISR          TCC1_CCA_vect
+    #define USB_TIMER_PERIOD      (F_CPU / 256 / 125)
+    #define USB_CONNECTED_DELAY   5000
+    #define USB_DISCONN_DELAY     15625
+
+    // GPS constants
+    #define GPS_INTERVAL          120
+    #define GPS_TIMEOUT           60
+    #define GPS_FIX_MISSES        5
+
 
 
 	/* Public Interface - May be used in end-application: */

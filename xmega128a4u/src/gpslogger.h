@@ -27,17 +27,16 @@
 #include <Drivers/LufaUsb.h>
 #include <Drivers/NMEAParser.h>
 
-// USB configuration
-#define USB_TIMER_PERIOD	(F_CPU / 256 / 125)
-#define USB_CONNECTED_DELAY	5000
-#define USB_DISCONN_DELAY	15625
 
-// GPS constants
-#define GPS_INTERVAL	120
-#define GPS_TIMEOUT		60
-#define GPS_FIX_MISSES	5
+/* Enable C linkage for C++ Compilers: */
+#if defined(__cplusplus)
+	extern "C" {
+#endif
 
 
+#if defined(__cplusplus)
+	}
+#endif
 
 
 

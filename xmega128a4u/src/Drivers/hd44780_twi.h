@@ -42,6 +42,11 @@
 		#include <util/delay.h>
 		#include <avr/power.h>
 
+  /* Enable C linkage for C++ Compilers: */
+  #if defined(__cplusplus)
+    extern "C" {
+  #endif
+
 	/* Macros: */
 		#define RS                  (1 << 4)
 		#define ENABLE              (1 << 7)
@@ -84,5 +89,11 @@
 		void HD44780_Initialize(void);
 		void HD44780_WriteData(const uint8_t c);
 		void HD44780_WriteCommand(const uint8_t c);
+
+
+#if defined(__cplusplus)
+  }
+#endif
+
 
 #endif

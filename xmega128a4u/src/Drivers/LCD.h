@@ -8,25 +8,36 @@
 
 #include "Drivers/hd44780_twi.h"
 
-typedef struct LCD_TWI_Interface
-{
-	TWI_t * TWI;
-	int32_t Baud;
-	uint8_t Address;
-	PORT_t * Port;
-	uint8_t Pins;
-	register8_t Control;
-} LCD_TWI_Interface_t;
+/* Enable C linkage for C++ Compilers: */
+#if defined(__cplusplus)
+	extern "C" {
+#endif
+
+	typedef struct LCD_TWI_Interface
+	{
+		TWI_t * TWI;
+		int32_t Baud;
+		uint8_t Address;
+		PORT_t * Port;
+		uint8_t Pins;
+		register8_t Control;
+	} LCD_TWI_Interface_t;
 
 
-extern LCD_TWI_Interface_t lcdInterface;
+	extern LCD_TWI_Interface_t lcdInterface;
 
 
-void LCD_Configure(const LCD_TWI_Interface_t*);
+	void LCD_Configure(const LCD_TWI_Interface_t*);
 
-void LCD_PrintString_P(const char*);
+	void LCD_PrintString_P(const char*);
 
-void LCD_BacklightOn(void);
-void LCD_BacklightOff(void);
+	void LCD_BacklightOn(void);
+	void LCD_BacklightOff(void);
+
+
+#if defined(__cplusplus)
+	}
+#endif
+
 
 #endif

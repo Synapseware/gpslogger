@@ -8,7 +8,21 @@
 
 
 
-char* ParseNMEA_Sentence(const char* sentence);
+/* Enable C linkage for C++ Compilers: */
+#if defined(__cplusplus)
+	extern "C" {
+#endif
+
+
+	/** Parses a NMEA sentence? */
+	char* ParseNMEA_Sentence(const char* sentence);
+
+
+
+#if defined(__cplusplus)
+	}
+#endif
+
 
 
 
