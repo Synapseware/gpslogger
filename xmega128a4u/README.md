@@ -42,3 +42,7 @@ I have created this board as a project for a friend.  You are welcome to copy th
 * Fix data is parsed from GPRMC message
 * Each NMEA log sentence is appended to the log file at the start of the last message
 
+
+
+## Notes
+- To add TWI support, add `$(LUFA_SRC_TWI)` back to the makefile.

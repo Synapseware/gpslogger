@@ -58,6 +58,18 @@
 		#endif
 
 
+    // Built-in LED
+    #define LED_PORT    PORTE
+    #define LED_PIN     PIN1_bm
+
+    // LED setup
+    #define ERR_LED_port  PORTB
+    #define ERR_LED_pin   PIN2_bm
+    #define DIAG_LED_port PORTB
+    #define DIAG_LED_pin  PIN1_bm
+    #define INFO_LED_port PORTB
+    #define INFO_LED_pin  PIN0_bm
+
     // GPS
     // Table 32-4. Port D - alternate functions.
     // GPS RX goes to XMega TX and GPS TX goes to XMega RX

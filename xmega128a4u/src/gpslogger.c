@@ -53,18 +53,6 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 			},
 	};
 
-// Setup the TWI configuration
-LCD_TWI_Interface_t lcdInterface =
-{
-	.TWI = &LCD_TWI,
-	.Port = &LCD_PORT,
-	.Pins = LCD_SDA | LCD_SCL, // SDA & SCL
-	//.Control = LCD_CTRL,
-	.Address = 0x7E,
-	.Baud = 100000
-};
-
-
 
 /** Configures the CPU */
 static void ConfigureCPU(void)
@@ -221,20 +209,16 @@ void DebugLogGpsMessages(const char* message)
 	if (NULL == message)
 		return;
 
-	int length = strlen(message);
+	size_t length = strlen(message);
 
 	if (message[0] == '\r' || message[0] == '\n' || length < 5)
 	{
-		memset(message, 0, length);
 		return;
 	}
 
 	USB_PrintString_P(PSTR("> "));
 	USB_PrintString(message);
 	USB_PrintString_P(PSTR("\r\n"));
-
-	// clear the buffer
-	memset(message, 0, length);
 }
 
 
@@ -244,7 +228,6 @@ GPS NMEA data: http://www.gpsinformation.org/dale/nmea.htm */
 void HandleLatestGpsMessage(const char* message)
 {
 	strlcpy(_lastGpsMessage, message, sizeof(_lastGpsMessage));
-	memset(message, 0, strlen(message));
 	_processGpsMessage = true;
 }
 
@@ -355,51 +338,6 @@ void SetupHardware(void)
 	USB_Initialize();
 	TurnOffBuiltInLed();
 	//LCD_PrintString_P(PSTR("GPS Logger"));
-}
-
-/** Finds the first free page in the dataflash chip */
-static int32_t FindFirstFreeAddress(void)
-{
-	if (!device_is_ready(SPI_CS))
-	{
-		TurnOnErrLed();
-	}
-
-	TurnOnInfoLed();
-
-	int32_t address = 0;
-	int32_t freefrom = -1;
-	int matches = 0;
-
-	begin_read(SPI_CS, address);
-	while (address < FLASH_TOTAL_SIZE && address > -1)
-	{
-		// look for the first 0xFF followed by 0xFF's to the end
-		char data = read_byte();
-
-		if (0xFF == data)
-		{
-			matches++;
-			if (freefrom < 0)
-				freefrom = address;
-		}
-		else
-		{
-			matches = 0;
-			freefrom = -1;
-		}
-
-		address++;
-
-		// 255 0xFF's is most likely a free page...
-		if (matches > 255)
-			break;
-	}
-	end_read(SPI_CS);
-
-	TurnOffInfoLed();
-
-	return freefrom;
 }
 
 /** Maps the raw ADC sample to a voltage value */

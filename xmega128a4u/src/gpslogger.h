@@ -18,15 +18,14 @@
 #include <LUFA/Drivers/Peripheral/SPI.h>
 #include <LUFA/Drivers/Peripheral/TWI.h>
 
-#include "Board/hal.h"
-#include "Drivers/LCD.h"
-#include "Drivers/AdafruitGps.h"
-#include "Drivers/TC_driver.h"
-#include "Drivers/at25df321.h"
+#include <Board/hal.h>
+#include <Drivers/AdafruitGps.h>
+#include <Drivers/flash.h>
+#include <Drivers/TC_driver.h>
+#include <Drivers/at25df321.h>
 //#include "Drivers/rtc_driver.h"
-#include "Drivers/hd44780_twi.h"
-#include "Drivers/LufaUsb.h"
-#include "Drivers/NMEAParser.h"
+#include <Drivers/LufaUsb.h>
+#include <Drivers/NMEAParser.h>
 
 // USB configuration
 #define USB_TIMER_PERIOD	(F_CPU / 256 / 125)

@@ -1,5 +1,5 @@
 #include "flash.h"
-#include "hal.h"
+
 
 /** Finds the first free page in the dataflash chip */
 int32_t FindFirstFreeAddress(void)
@@ -9,7 +9,6 @@ int32_t FindFirstFreeAddress(void)
 		TurnOnErrLed();
 	}
 
-	TurnOffErrLed();
 	TurnOnInfoLed();
 
 	int32_t address = 0;
@@ -46,4 +45,5 @@ int32_t FindFirstFreeAddress(void)
 
 	return freefrom;
 }
+
 
