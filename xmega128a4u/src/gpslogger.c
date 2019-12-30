@@ -310,7 +310,7 @@
 	/** Prints an initial greeting to the USB port */
 	static void InitialGreeting(void)
 	{
-		USB_PrintString_P(PSTR("GPS Logger v1.1 - 20150801\r\n"));
+		USB_PrintString_P(PSTR("GPS Logger v1.2 - 20191227\r\n"));
 		USB_PrintString_P(PSTR(" Version: "));
 		if (strlen(_gpsVersion) > 0)
 			USB_PrintString(_gpsVersion);

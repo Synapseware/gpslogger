@@ -96,6 +96,7 @@
 	// returns a 1 if the chip is an at25df321, 0 if not
 	bool is_valid(uint8_t chip_cs)
 	{
+		TurnOnDiagLed();
 		_spi_port->OUTCLR = chip_cs;
 
 		uint8_t
@@ -111,6 +112,7 @@
 
 		_spi_port->OUTSET = chip_cs;
 
+		TurnOffDiagLed();
 		return mfgid == AT25DF321_MGF_ID &&
 			devid1 == AT25DF321_DEVICDE_ID &&
 			extinfo == 0;
