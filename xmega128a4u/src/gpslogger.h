@@ -23,9 +23,7 @@
 #include <Drivers/flash.h>
 #include <Drivers/TC_driver.h>
 #include <Drivers/at25df321.h>
-//#include "Drivers/rtc_driver.h"
 #include <Drivers/LufaUsb.h>
-#include <Drivers/NMEAParser.h>
 
 
 /* Enable C linkage for C++ Compilers: */

@@ -552,7 +552,8 @@
 			if (_processGpsMessage)
 			{
 				//ProcessGpsMessage(_lastGpsMessage);
-				DebugLogGpsMessages(_lastGpsMessage);
+				//DebugLogGpsMessages(_lastGpsMessage);
+				memset(_lastGpsMessage, 0, sizeof(_lastGpsMessage));
 				_processGpsMessage = false;
 				continue;
 			}

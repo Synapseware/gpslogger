@@ -26,12 +26,10 @@ SRC				= $(TARGET).c \
 				Board/hal.c \
 				Drivers/flash.c \
 				Drivers/Descriptors.c \
-				Drivers/NMEAParser.c \
 				Drivers/AdafruitGps.c \
 				Drivers/TC_driver.c \
 				Drivers/at25df321.c \
 				Drivers/LufaUsb.c \
-				Drivers/GpsInterface.c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL) \
