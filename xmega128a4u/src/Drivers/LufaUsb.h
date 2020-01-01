@@ -14,6 +14,11 @@
 #include <LUFA/Drivers/USB/USB.h>
 #include <LUFA/Drivers/USB/Class/Common/CDCClassCommon.h>
 
+/* Enable C linkage for C++ Compilers: */
+#if defined(__cplusplus)
+	extern "C" {
+#endif
+
 
 extern USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface;
 
@@ -35,6 +40,11 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t* const C
 void EVENT_USB_Device_ConfigurationChanged(void);
 void EVENT_USB_Device_ControlRequest(void);
 
+
+
+#if defined(__cplusplus)
+	}
+#endif
 
 
 #endif

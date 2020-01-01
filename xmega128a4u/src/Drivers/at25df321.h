@@ -6,9 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include <LUFA/Drivers/Peripheral/SPI.h>
-
-#include "../gpslogger.h"
 
 #define	FLASH_TOTAL_SIZE				4194304UL
 #define	FLASH_PAGE_SIZE					256UL
@@ -73,6 +70,7 @@
 #define AT25DF321_MGF_ID				0x1F
 #define AT25DF321_DEVICDE_ID			0x47
 
+#define AT25DF321_BLK_MASK_PAGE			0xFFFFFF00
 #define AT25DF321_BLK_MASK_4K			0xFFFFF000
 #define AT25DF321_BLK_MASK_32K			0xFFFFC000
 #define AT25DF321_BLK_MASK_64K			0xFFFF8000
@@ -81,45 +79,90 @@
 //---------------------------------------------------
 
 
+typedef uint8_t BLOCK_SIZE_t;
+#define BLOCK_SIZE_256			1
+#define BLOCK_SIZE_4k			2
+#define BLOCK_SIZE_32k			3
+#define BLOCK_SIZE_64k			4
+#define BLOCK_SIZE_ALL			5
 
-// Initializes the flash driver & IO hardware
-void FlashDriver_Init(SPI_t* spi, PORT_t* spi_port, uint8_t cs);
+typedef uint8_t MODE_t;
+#define MODE_READ				0
+#define MODE_WRITE				1
 
-// device protection methods
-void write_enable(uint8_t chip_cs);
-void write_disable(uint8_t chip_cs);
-void global_unprotect(uint8_t chip_cs);
-void global_protect(uint8_t chip_cs);
 
-// device validity checks
-bool is_valid(uint8_t chip_cs);
+class SPIClass
+{
+public:
+	SPIClass(SPI_t* device);
+	uint8_t transfer(uint8_t data);
 
-// power saving options
-void power_down(uint8_t chip_cs);
-void resume(uint8_t chip_cs);
+private:
+	SPI_t* _spi;
+};
 
-// device status methods
-bool is_write_enabled(uint8_t chip_cs);
-bool is_write_protected(uint8_t chip_cs);
-bool device_is_ready(uint8_t chip_cs);
-bool programming_error(uint8_t chip_cs);
 
-// erase methods
-void erase_block_4k(uint8_t chip_cs, uint32_t address);
-void erase_block_32k(uint8_t chip_cs, uint32_t address);
-void erase_block_64k(uint8_t chip_cs, uint32_t address);
-void erase_chip(uint8_t chip_cs);
 
-// persistence methods
-void begin_write(uint8_t chip_cs, uint32_t address);
-void write_byte(char data);
-void end_write(uint8_t chip_cs);
-void write_block(uint8_t chip_cs, uint32_t address, const char * pbuff, int count);
+class FlashDriver
+{
+public:
+	FlashDriver(SPIClass*);
 
-// reading methods
-void begin_read(uint8_t chip_cs, uint32_t address);
-void end_read(uint8_t chip_cs);
-char read_byte(void);
-int read_block(uint8_t chip_cs, uint32_t address, char* pbuff, int count);
+	// valid device check
+	bool valid(void);
+
+	// power saving
+	void suspend(void);
+	void resume(void);
+
+	// protections
+	void globalUnprotect(void);
+	void globalProtect(void);
+	void protectSector(uint8_t);
+	void unprotectSector(uint8_t);
+
+	// device state
+	bool enabled(void);
+	bool disabled(void);
+	bool busy(void);
+	void enable(void);
+	void disable(void);
+
+	// check for previous programming error
+	bool error(void);
+
+	// various erase functions (4k, 32k, 64k, chip)
+	bool erase(BLOCK_SIZE_t, uint32_t);
+
+	// 
+	bool open(MODE_t);
+	bool open(MODE_t, uint32_t);
+	void close(void);
+
+	// seek to a specific position within the device
+	void seek(uint32_t);
+	uint32_t position(void);
+
+	// reads
+	int read(char*, int);
+	int read(void);
+
+	// writes
+	int write(const char*, int);
+	int write(char);
+
+
+private:
+	void open(void);
+	void begin(void);
+	void writeSingle(char);
+	uint8_t readStatusRegister(void);
+	void setGlobalProtectState(uint8_t);
+
+	SPIClass* _spi;
+	uint32_t _position;
+	MODE_t _mode;
+};
+
 
 #endif

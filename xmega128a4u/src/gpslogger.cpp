@@ -1,16 +1,10 @@
 #include "gpslogger.h"
 
-/* Enable C linkage for C++ Compilers: */
-#if defined(__cplusplus)
-	extern "C" {
-#endif
-
-
 	#define MESSAGE_SIZE		120
 
 
 	/** Lifecycle and USB flags */
-	volatile int32_t	_flashWriteAddr		= 0;
+	volatile uint32_t	_flashWriteAddr		= 0;
 	volatile int		_gpsData			= -1;
 	volatile int8_t		_secondsTick		= 0;
 
@@ -30,36 +24,8 @@
 	static char 		_lastGpsMessage[MESSAGE_SIZE];
 	static char			_buffer[MESSAGE_SIZE];
 
-
-	/** LUFA CDC Class driver interface configuration and state information. This structure is
-	 *  passed to all CDC Class driver functions, so that multiple instances of the same class
-	 *  within a device can be differentiated from one another.
-	 */
-	USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
-		{
-			.Config =
-				{
-					.ControlInterfaceNumber   = INTERFACE_ID_CDC_CCI,
-					.DataINEndpoint           =
-						{
-							.Address          = CDC_TX_EPADDR,
-							.Size             = CDC_TXRX_EPSIZE,
-							.Banks            = 1,
-						},
-					.DataOUTEndpoint =
-						{
-							.Address          = CDC_RX_EPADDR,
-							.Size             = CDC_TXRX_EPSIZE,
-							.Banks            = 1,
-						},
-					.NotificationEndpoint =
-						{
-							.Address          = CDC_NOTIFICATION_EPADDR,
-							.Size             = CDC_NOTIFICATION_EPSIZE,
-							.Banks            = 1,
-						},
-				},
-		};
+	SPIClass Spi(&SPIC);
+	FlashDriver Flash(&Spi);
 
 
 	/** Poweroff the GPS */
@@ -213,7 +179,6 @@
 
 		// Initialize peripherals
 		InitializeTimers();
-		//LCD_Configure(&lcdInterface);
 		InitializeADC();
 		InitializeSPI();
 
@@ -227,7 +192,6 @@
 		TurnOnBuiltInLed();
 		USB_Initialize();
 		TurnOffBuiltInLed();
-		//LCD_PrintString_P(PSTR("GPS Logger"));
 	}
 
 	/** Maps the raw ADC sample to a voltage value */
@@ -252,7 +216,7 @@
 	static bool SaveNMEA(void)
 	{
 		// make sure our string is NULL terminated
-		int sentenceLength = strlen(_nmea);
+		size_t sentenceLength = strlen(_nmea);
 		if (_flashWriteAddr < 0 || sentenceLength >= sizeof(_nmea))
 		{
 			return false;
@@ -278,29 +242,12 @@
 		TurnOnInfoLed();
 
 		// write latest message to flash
-		int idx = 0;
-		char data;
-		begin_write(SPI_CS, _flashWriteAddr);
-		while (0 != (data = _nmea[idx++]))
-		{
-			// write a byte of data to the flash
-			write_byte(data);
-			_flashWriteAddr++;
+		Flash.open(MODE_WRITE, _flashWriteAddr);
+		Flash.write(_nmea, sentenceLength);
+		Flash.close();
 
-			// check for page-boundary crossing
-			if ((_flashWriteAddr & FLASH_PAGE_MASK) == 0)
-			{
-				end_write(SPI_CS);
-				while(is_write_enabled(SPI_CS));
-
-				// set programming to next page
-				begin_write(SPI_CS, _flashWriteAddr);
-			}
-		}
-
-		// complete the write cycle
-		end_write(SPI_CS);
-		while(is_write_enabled(SPI_CS));
+		// wait for write to complete
+		while(Flash.busy());
 
 		TurnOffInfoLed();
 
@@ -320,7 +267,7 @@
 
 		USB_PrintString_P(PSTR("Flash info:\r\n"));
 		USB_PrintString_P(PSTR("  Valid: "));
-		if (is_valid(SPI_CS))
+		if (Flash.valid())
 			USB_PrintString_P(PSTR("Y"));
 		else
 			USB_PrintString_P(PSTR("N"));	
@@ -332,7 +279,7 @@
 
 			global_unprotect(SPI_CS);
 
-			USB_PrintString_P(PSTR("  Formatting flash...\r\n"));
+			USB_PrintString_P(PSTR("  Formatting Flash...\r\n"));
 			erase_block_4k(SPI_CS, 0);
 			while(is_write_enabled(SPI_CS));
 
@@ -649,7 +596,3 @@
 			}
 		}
 	}
-
-#if defined(__cplusplus)
-	}
-#endif

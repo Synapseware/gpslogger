@@ -3,4 +3,5 @@ obj/
 *.o
 *.eep
 *.hex
+Arduino/*
 
