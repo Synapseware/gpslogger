@@ -1,9 +1,9 @@
 #include "flash.h"
 
 /** Finds the first free page in the dataflash chip */
-int32_t FindFirstFreeAddress(void)
+int32_t FindFirstFreeAddress(FlashDriver* flash)
 {
-	if (!device_is_ready(SPI_CS))
+	if (!flash->busy())
 	{
 		TurnOnErrLed();
 	}
@@ -14,11 +14,11 @@ int32_t FindFirstFreeAddress(void)
 	int32_t freefrom = -1;
 	int matches = 0;
 
-	begin_read(SPI_CS, address);
+	flash->open(MODE_READ, address);
 	while (address < FLASH_TOTAL_SIZE && address > -1)
 	{
 		// look for the first 0xFF followed by 0xFF's to the end
-		char data = read_byte();
+		char data = flash->read();
 
 		if (0xFF == data)
 		{
@@ -38,7 +38,8 @@ int32_t FindFirstFreeAddress(void)
 		if (matches > 255)
 			break;
 	}
-	end_read(SPI_CS);
+	
+	flash->close();
 
 	TurnOffInfoLed();
 

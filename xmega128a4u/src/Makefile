@@ -23,12 +23,12 @@ FUSE_5			= 0xFF
 OPTIMIZATION	= s
 TARGET			= gpslogger
 SRC				= $(TARGET).cpp \
-				Board/hal.cpp \
+				Drivers/hal.cpp \
 				Drivers/flash.cpp \
-				Drivers/Descriptors.c \
-				Drivers/AdafruitGps.c \
-				Drivers/TC_driver.c \
+				Drivers/AdafruitGps.cpp \
 				Drivers/at25df321.cpp \
+				Drivers/Descriptors.c \
+				Drivers/TC_driver.c \
 				Drivers/LufaUsb.c \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \

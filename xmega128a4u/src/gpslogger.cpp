@@ -25,7 +25,7 @@
 	static char			_buffer[MESSAGE_SIZE];
 
 	SPIClass Spi(&SPIC);
-	FlashDriver Flash(&Spi);
+	FlashDriver Flash(&Spi, SelectOnboardFlashDevice);
 
 
 	/** Poweroff the GPS */
@@ -293,7 +293,7 @@
 		}
 
 		USB_PrintString_P(PSTR("  Searching for free start address...\r\n"));
-		_flashWriteAddr = FindFirstFreeAddress();
+		_flashWriteAddr = FindFirstFreeAddress(&Flash);
 		if (_flashWriteAddr < 0)
 		{
 			USB_PrintString_P(PSTR("  Failed to find a free address.\r\n"));

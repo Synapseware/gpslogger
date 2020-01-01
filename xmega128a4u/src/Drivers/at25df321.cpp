@@ -41,9 +41,10 @@ uint8_t SPIClass::transfer(uint8_t data)
 
 // -------------------------------------------------------------------------------------------------------------------------
 // Initializes the AT24DF321 flash driver
-FlashDriver::FlashDriver(SPIClass* spi)
+FlashDriver::FlashDriver(SPIClass* spi, SELECTDEVICEFUNC_t selCs)
 {
 	_spi = spi;
+	_selCs = selCs;
 	_mode = MODE_READ;
 	_position = 0;
 }
@@ -283,7 +284,7 @@ bool FlashDriver::open(MODE_t mode, uint32_t position)
 void FlashDriver::close(void)
 {
 	// terminate any previous operation
-	SPI_PORT |= (SPI_CS_bm);
+	_selCs(CS_MODE_DESELECT);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -292,7 +293,7 @@ void FlashDriver::seek(uint32_t position)
 {
 	_position = position;
 
-	if ((SPI_PORT & ~(SPI_CS_bm)) == 0)
+	if (_selCs(CS_MODE_READ) == 0)
 	{
 		// terminate any previous operation
 		close();
@@ -471,5 +472,5 @@ void FlashDriver::setGlobalProtectState(uint8_t protect)
 // Asserts the devices CS pin
 void FlashDriver::open(void)
 {
-	SPI_PORT &= ~(SPI_CS_bm);
+	_selCs(CS_MODE_SELECT);
 }

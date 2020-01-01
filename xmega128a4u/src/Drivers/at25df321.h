@@ -75,7 +75,7 @@
 #define AT25DF321_BLK_MASK_32K			0xFFFFC000
 #define AT25DF321_BLK_MASK_64K			0xFFFF8000
 
-#define AT25DF321_ADDRESS_MASK			0x3FFFFF
+#define AT25DF321_ADDRESS_MASK			0x003FFFFF
 //---------------------------------------------------
 
 
@@ -86,9 +86,25 @@ typedef uint8_t BLOCK_SIZE_t;
 #define BLOCK_SIZE_64k			4
 #define BLOCK_SIZE_ALL			5
 
+
 typedef uint8_t MODE_t;
 #define MODE_READ				0
 #define MODE_WRITE				1
+
+typedef enum FLASH_IO_MODE_enum
+{
+	FLASH_IO_MODE_READ = 0,
+	FLASH_IO_MODE_WRITE = 1
+} FLASH_IO_MODE_t;
+
+
+typedef enum SPI_CS_MODE_enum
+{
+	CS_MODE_SELECT = 0,
+	CS_MODE_DESELECT = 1,
+	CS_MODE_READ = 2
+} SPI_CS_MODE_t;
+typedef int8_t (*SELECTDEVICEFUNC_t)(SPI_CS_MODE_t);
 
 
 class SPIClass
@@ -106,7 +122,7 @@ private:
 class FlashDriver
 {
 public:
-	FlashDriver(SPIClass*);
+	FlashDriver(SPIClass*, SELECTDEVICEFUNC_t);
 
 	// valid device check
 	bool valid(void);
@@ -160,6 +176,7 @@ private:
 	void setGlobalProtectState(uint8_t);
 
 	SPIClass* _spi;
+	SELECTDEVICEFUNC_t _selCs;
 	uint32_t _position;
 	MODE_t _mode;
 };

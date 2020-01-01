@@ -1,4 +1,4 @@
-#include <Board/hal.h>
+#include <Drivers/hal.h>
 
 extern volatile int8_t _secondsTick;
 extern volatile uint16_t _gpsBattery;
@@ -131,7 +131,24 @@ void InitializeSPI(void)
 	);
 
 	// Initialize the FLASH driver
-	FlashDriver_Init(&SPI_DEVICE, &SPI_PORT, SPI_CS);
+	//FlashDriver_Init(&SPI_DEVICE, &SPI_PORT, SPI_CS);
+}
+
+int8_t SelectOnboardFlashDevice(SPI_CS_MODE_t chipSelectMode)
+{
+	switch (chipSelectMode)
+	{
+		case CS_MODE_SELECT:
+			SPI_PORT.OUTCLR = SPI_CS;
+			break;;
+		case CS_MODE_DESELECT:
+			SPI_PORT.OUTSET = SPI_CS;
+			break;
+		case CS_MODE_READ:
+			return (SPI_PORT.IN & SPI_CS) != 0;
+	}
+
+	return -1;
 }
 
 /** Configures the pins that the GPS module needs to communicate with the
