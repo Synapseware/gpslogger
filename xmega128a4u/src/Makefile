@@ -33,7 +33,8 @@ SRC				= $(TARGET).cpp \
 				$(LUFA_SRC_USB) \
 				$(LUFA_SRC_USBCLASS) \
 				$(LUFA_SRC_SERIAL) \
-				$(LUFA_SRC_SPI)
+				$(LUFA_SRC_SPI) \
+				Arduino/Print.cpp
 LUFA_PATH		= ../LUFA
 CC_FLAGS		= -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS		= -Wl,-u,vfprintf -lprintf_flt
